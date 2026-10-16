@@ -1,9 +1,10 @@
-/* Joy — molten chocolate & caramel hero.
-   One full-screen fragment shader: a slow, silky liquid surface (iterated
-   sine warping), lit like a studio pour (three specular lobes + softbox
-   reflection), with real drips hanging off the bottom edge (signed-distance
-   round cones, smooth-unioned into the pour) that cast a soft shadow on the
-   page below. The cursor stirs the surface.
+/* Joy — milk, honey & pistachio hero.
+   One full-screen fragment shader: a slow, silky milk surface (iterated sine
+   warping) marbled with thin ribbons of honey and pistachio, lit by bright
+   Mediterranean daylight (soft diffuse + satin sheen + sky reflections in the
+   folds), with real drips of milk hanging off the bottom edge (signed-distance
+   round cones, smooth-unioned into the pour) that cast a soft sea-blue shadow
+   on the page below. The cursor stirs the surface.
    Speed: surface normals come from hardware derivatives (one field sample per
    pixel), so it can render at the screen's native resolution. */
 (function () {
@@ -104,51 +105,59 @@ void main(){
   float shadowA = 0.0;
   if (px.y < uEdge + 8.0) {
     float ds = shape(px + vec2(-2.5, 8.0), W);
-    shadowA = 0.32 * (1.0 - smoothstep(-4.0, 14.0, ds));
+    shadowA = 0.24 * (1.0 - smoothstep(-4.0, 14.0, ds));
   }
   if (aIn <= 0.0 && shadowA < 0.002) { gl_FragColor = vec4(0.0); return; }
 
-  vec3 n = normalize(vec3(-gh * 95.0, 1.0));
+  vec3 n = normalize(vec3(-gh * 70.0, 1.0));
   // rounded bead along the pour edge and the drips
   float rim = 1.0 - smoothstep(0.0, 15.0, -d);
-  n = normalize(n + vec3(gd * rim * 2.4, 0.0));
+  n = normalize(n + vec3(gd * rim * 1.5, 0.0));
 
   vec3 V  = vec3(0.0, 0.0, 1.0);
   vec3 L  = normalize(vec3(uLight, 0.9));
   vec3 Hh = normalize(L + V);
   float ndl = max(dot(n, L), 0.0);
   float ndh = max(dot(n, Hh), 0.0);
-  // three lobes: a broad satin sheen, a soft highlight and a sharp glint
-  float spec = pow(ndh, 9.0) * 0.16 + pow(ndh, 48.0) * 0.38 + pow(ndh, 320.0) * 1.25;
+  // milk is satin, not glass: a wide sheen, a soft highlight, a small glint
+  float spec = pow(ndh, 10.0) * 0.10 + pow(ndh, 60.0) * 0.20 + pow(ndh, 420.0) * 0.55;
   float fres = pow(1.0 - n.z, 2.0);
   vec2  R = n.xy * 2.0 * n.z;
   float box = smoothstep(0.06, 0.0, abs(R.x - uLight.x * 0.3) - 0.2)
             * smoothstep(0.06, 0.0, abs(R.y - uLight.y * 0.3) - 0.08);
   float sky = smoothstep(-0.2, 0.8, R.y);
 
-  vec3 chocDeep = vec3(0.075, 0.032, 0.014);
-  vec3 choc     = vec3(0.300, 0.142, 0.064);
-  vec3 carDeep  = vec3(0.470, 0.200, 0.050);
-  vec3 car      = vec3(0.900, 0.540, 0.190);
-  float bw = 0.045 + 0.06 * f0.x;   // ribbons thicken where the surface swells
-  float band = smoothstep(bw, bw * 0.45, abs(f0.y - 0.80));
-  vec3 base = mix(mix(chocDeep, choc, smoothstep(0.0, 0.8, f0.x)), mix(carDeep, car, smoothstep(0.0, 0.8, f0.x)), band * 0.95);
+  vec3 milkLo  = vec3(0.865, 0.872, 0.860);   // shaded milk picks up a little sea-blue sky
+  vec3 milkHi  = vec3(0.995, 0.975, 0.940);
+  vec3 honeyLo = vec3(0.800, 0.560, 0.220);
+  vec3 honeyHi = vec3(0.975, 0.800, 0.470);
+  vec3 pistLo  = vec3(0.600, 0.690, 0.450);
+  vec3 pistHi  = vec3(0.800, 0.860, 0.620);
+  float sh = smoothstep(0.0, 0.85, f0.x);
+  float bw = 0.035 + 0.05 * f0.x;   // ribbons thicken where the surface swells
+  float honey = smoothstep(bw, bw * 0.2, abs(f0.y - 0.80));
+  float pist  = smoothstep(bw * 0.7, bw * 0.15, abs(f0.y - 0.24));
+  vec3 base = mix(milkLo, milkHi, sh);
+  base = mix(base, mix(honeyLo, honeyHi, sh), honey * 0.82);
+  base = mix(base, mix(pistLo, pistHi, sh), pist * 0.6);
 
-  vec3 col = base * (0.38 + 0.8 * ndl);
-  col += sky * 0.07 * vec3(1.0, 0.78, 0.55);
-  col += spec * mix(vec3(1.0, 0.80, 0.60), vec3(1.0, 0.92, 0.78), band);
-  col += box * 0.26 * vec3(1.0, 0.86, 0.68);
-  col += fres * 0.05 * vec3(1.0, 0.66, 0.38);
-  col *= 1.0 - rim * 0.16;
+  vec3 col = base * (0.66 + 0.40 * ndl);            // light scatters inside milk: high ambient
+  col += sky * 0.07 * vec3(0.55, 0.80, 0.88);
+  col += fres * 0.12 * (1.0 - rim * 0.7) * vec3(0.52, 0.80, 0.90);      // Mediterranean blue in the folds
+  col += spec * vec3(1.0, 0.985, 0.95);
+  col += box * 0.10 * vec3(1.0, 0.97, 0.9);
+  col = mix(col, vec3(0.975, 0.958, 0.93), rim * 0.32);   // drips stay creamy white, never metallic
 
-  // a darker stage behind the wordmark so the gold reads
+  // a whisper of shade behind the wordmark so the gold reads on white
   vec2 c = (px - uStage) / vec2(W * 0.40, H * 0.26);
-  col *= 1.0 - 0.34 * exp(-dot(c, c));
-  col *= mix(0.80, 1.0, smoothstep(H, H * 0.55, px.y));
+  col *= 1.0 - 0.08 * exp(-dot(c, c));
+  col *= mix(0.93, 1.0, smoothstep(H, H * 0.55, px.y));
+  col = col / (1.0 + 0.1 * col) * 1.1;              // soft shoulder so highlights never clip flat
 
   col += (hash2(gl_FragCoord.xy + fract(uTime)) - 0.5) / 255.0;
 
-  gl_FragColor = vec4(col * aIn, aIn + shadowA * (1.0 - aIn));
+  vec3 shadowCol = vec3(0.10, 0.20, 0.22);          // drips cast a cool, sea-tinted shadow
+  gl_FragColor = vec4(col * aIn + shadowCol * shadowA * (1.0 - aIn), aIn + shadowA * (1.0 - aIn));
 }`;
 
   function compile(gl, type, src) {

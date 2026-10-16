@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Joy — Desserts Worth Hunting For</title>
   <meta name="description" content="Joy makes handmade desserts in small, fresh batches: caramel Trileçe, Layali Beirut, chocolate balls and five-flavour cheesecakes. Delivery in the Haifa area, pickup elsewhere, order 2 days ahead.">
-  <meta name="theme-color" content="#1A0D07">
+  <meta name="theme-color" content="#E8F3F2">
   <meta property="og:title" content="Joy — Desserts Worth Hunting For">
   <meta property="og:description" content="Trileçe, Layali Beirut, chocolate balls and five-flavour cheesecakes. Delivery in the Haifa area. Order 2 days ahead.">
   <meta property="og:type" content="website">
@@ -37,6 +37,13 @@
       <stop offset="0"   stop-color="#7AD3D6"/>
       <stop offset=".45" stop-color="#55BCC1"/>
       <stop offset="1"   stop-color="#3EA2A8"/>
+    </linearGradient>
+    <linearGradient id="g-gold-deep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#EBCB83"/>
+      <stop offset=".3"  stop-color="#C39239"/>
+      <stop offset=".52" stop-color="#8E6420"/>
+      <stop offset=".74" stop-color="#D9B15F"/>
+      <stop offset="1"   stop-color="#9A6E28"/>
     </linearGradient>
     <symbol id="seal" viewBox="0 0 240 160">
       <ellipse cx="120" cy="80" rx="117" ry="77" fill="url(#g-band)"/>
@@ -75,6 +82,19 @@
       <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="sb"/>
       <feOffset in="sb" dy="16" result="so"/>
       <feFlood flood-color="#0B0402" flood-opacity=".62"/>
+      <feComposite in2="so" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge>
+    </filter>
+    <filter id="f-emboss-light" x="-12%" y="-25%" width="124%" height="150%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
+      <feSpecularLighting in="b" surfaceScale="6" specularConstant="1.1" specularExponent="24" lighting-color="#FFF8E4" result="s">
+        <fePointLight x="300" y="-80" z="420"/>
+      </feSpecularLighting>
+      <feComposite in="s" in2="SourceAlpha" operator="in" result="si"/>
+      <feComposite in="SourceGraphic" in2="si" operator="arithmetic" k1="0" k2="1" k3=".75" k4="0" result="lit"/>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="9" result="sb"/>
+      <feOffset in="sb" dy="12" result="so"/>
+      <feFlood flood-color="#6B4A16" flood-opacity=".3"/>
       <feComposite in2="so" operator="in" result="sh"/>
       <feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge>
     </filter>
@@ -144,7 +164,7 @@
 <main>
 
 <!-- ══ HERO: molten chocolate & caramel (WebGL) ══ -->
-<section class="hero" id="top" data-bg style="--bg:#F6EEE3" data-fx="none">
+<section class="hero" id="top" data-bg style="--bg:#E8F3F2" data-fx="none">
   <canvas class="liquid" id="liquid" aria-hidden="true"></canvas>
   <div class="hero-fallback" aria-hidden="true"></div>
   <div class="hero-inner" id="heroInner">
@@ -152,7 +172,7 @@
     <h1 class="hero-title">
       <span class="sr-only" data-i18n="hero.h1">Joy — handmade desserts</span>
       <span class="mark mark-hero" aria-hidden="true">
-        <svg class="mark-base" viewBox="0 0 1000 560"><text x="520" y="350" text-anchor="middle" fill="url(#g-gold)" filter="url(#f-emboss)">Joy</text></svg>
+        <svg class="mark-base" viewBox="0 0 1000 560"><text x="520" y="350" text-anchor="middle" fill="url(#g-gold-deep)" filter="url(#f-emboss-light)">Joy</text></svg>
         <svg class="mark-fx" viewBox="0 0 1000 560">
           <defs>
             <radialGradient id="glintHero" gradientUnits="userSpaceOnUse" cx="300" cy="160" r="280">
@@ -177,7 +197,7 @@
 </section>
 
 <!-- ══ MANIFESTO: words fill in as you scroll ══ -->
-<section class="manifesto" id="manifesto" data-bg style="--bg:#F6EEE3;--ink:#2A1A12;--accent:#B5772F" data-fx="gold-soft">
+<section class="manifesto" id="manifesto" data-bg style="--bg:#E8F3F2;--ink:#1E3638;--accent:#A87C2E" data-fx="gold-soft">
   <p class="eyebrow" data-i18n="man.label" data-reveal>Why people hunt for Joy</p>
   <p class="manifesto-text" id="manifestoText" data-i18n="man.text">Joy isn't on every corner. Every dessert is made fresh, in small batches, with ingredients we would never trade down: real <em>pistachios</em>, ripe <em>fruit</em>, slow-cooked <em>caramel</em>, proper <em>cream</em>. When today's batch is gone, it's <em>gone</em>.</p>
   <svg class="manifesto-seal" aria-hidden="true" data-parallax="-0.18"><use href="#seal"/></svg>
@@ -190,7 +210,7 @@
 </div>
 
 <!-- ══ OPENING: a window that opens onto the table as you scroll ══ -->
-<section class="opening" id="collection" data-bg style="--bg:#22100A;--ink:#F6EEE3;--accent:#E3A04F" data-fx="caramel" aria-labelledby="colTitle">
+<section class="opening" id="collection" data-bg style="--bg:#F5EEE2;--ink:#2E2416;--accent:#A87C2E" data-fx="olive" aria-labelledby="colTitle">
   <div class="opening-sticky">
     <div class="opening-head" id="openingHead">
       <p class="eyebrow" data-i18n="col.label">The collection</p>
@@ -213,7 +233,7 @@
 <div class="chapters">
 
   <!-- 01 · Trileçe -->
-  <article class="chapter" id="trilece" data-bg style="--bg:#22100A;--ink:#F6EEE3;--accent:#E3A04F;--glow:#E08A2C" data-fx="caramel">
+  <article class="chapter" id="trilece" data-bg style="--bg:#F7EBD5;--ink:#3A2A16;--accent:#A8741F;--glow:#F0C97A" data-fx="honey">
     <div class="chapter-media">
       <figure class="lid" data-tilt>
         <img src="assets/img/trilece.webp" srcset="assets/img/trilece-sm.webp 600w, assets/img/trilece.webp 1206w, assets/img/trilece@2x.webp 2412w" sizes="(max-width: 860px) 92vw, 46vw" width="1206" height="1550" loading="lazy" decoding="async" alt="Trileçe in a gold tray: caramel glaze piped with a cream chevron pattern, wrapped in the Joy band">
@@ -231,7 +251,7 @@
   </article>
 
   <!-- 02 · Chocolate Balls -->
-  <article class="chapter chapter-flip" id="balls" data-bg style="--bg:#140B08;--ink:#F6EEE3;--accent:#F2C46D;--glow:#8B4B2A" data-fx="sprinkles">
+  <article class="chapter chapter-flip" id="balls" data-bg style="--bg:#E2EFF3;--ink:#1E3638;--accent:#2B8C92;--glow:#9FD3DA" data-fx="sprinkles">
     <div class="chapter-media">
       <figure class="lid" data-tilt>
         <img src="assets/img/choco-box.webp" srcset="assets/img/choco-box-sm.webp 600w, assets/img/choco-box.webp 1206w, assets/img/choco-box@2x.webp 2412w" sizes="(max-width: 860px) 92vw, 46vw" width="1206" height="1550" loading="lazy" decoding="async" alt="A round clear box of chocolate balls rolled in coconut and rainbow sprinkles, with Lotus biscuits and chocolates on a wooden table">
@@ -249,7 +269,7 @@
   </article>
 
   <!-- 03 · Layali Beirut -->
-  <article class="chapter" id="beirut" data-bg style="--bg:#F4E6E3;--ink:#3A2027;--accent:#7E9748;--glow:#E7B9C0" data-fx="rose">
+  <article class="chapter" id="beirut" data-bg style="--bg:#EAF0DF;--ink:#2D3A24;--accent:#6E8A3A;--glow:#E7B9C0" data-fx="rose">
     <div class="chapter-media">
       <figure class="lid" data-tilt>
         <img src="assets/img/beirut-stack.webp" srcset="assets/img/beirut-stack-sm.webp 600w, assets/img/beirut-stack.webp 1206w, assets/img/beirut-stack@2x.webp 2412w" sizes="(max-width: 860px) 92vw, 46vw" width="1206" height="1521" loading="lazy" decoding="async" alt="Three stacked tubs of Layali Beirut topped with cream, crushed pistachio and dried rose petals">
@@ -267,7 +287,7 @@
   </article>
 
   <!-- 04 · Cheesecake -->
-  <article class="chapter chapter-flip" id="cheesecake" data-bg style="--bg:#E4F2F1;--ink:#12373A;--accent:#2B8C92;--glow:#9AD8D9" data-fx="berries">
+  <article class="chapter chapter-flip" id="cheesecake" data-bg style="--bg:#F7F1E6;--ink:#12373A;--accent:#2B8C92;--glow:#9AD8D9" data-fx="berries">
     <div class="chapter-media">
       <figure class="lid" data-tilt>
         <img src="assets/img/blueberry.webp" srcset="assets/img/blueberry-sm.webp 600w, assets/img/blueberry.webp 1206w, assets/img/blueberry@2x.webp 2412w" sizes="(max-width: 860px) 92vw, 46vw" width="1206" height="1502" loading="lazy" decoding="async" alt="Blueberry cheesecake in a round clear box with the turquoise Joy band">
@@ -286,7 +306,7 @@
 </div>
 
 <!-- ══ FLAVOURS: spotlight on the real photo ══ -->
-<section class="flavours" id="flavours" data-bg style="--bg:#1B1E3E;--ink:#F3F1FA;--accent:#A9B4FF" data-fx="blueberry" aria-labelledby="flTitle">
+<section class="flavours" id="flavours" data-bg style="--bg:#E9EBF7;--ink:#23264D;--accent:#4A50A8" data-fx="blueberry" aria-labelledby="flTitle">
   <div class="flavours-head">
     <p class="eyebrow" data-i18n="fl.label" data-reveal>Cheesecake flavours</p>
     <h2 class="display" id="flTitle" data-i18n="fl.title" data-split>Pick your <em>mood</em></h2>
@@ -325,7 +345,7 @@
 </section>
 
 <!-- ══ THE TABLE: a 3D ring you can spin ══ -->
-<section class="table" id="table" data-bg style="--bg:#120A07;--ink:#F6EEE3;--accent:#E9C77E" data-fx="gold" aria-labelledby="tbTitle">
+<section class="table" id="table" data-bg style="--bg:#DCEDEF;--ink:#1E3638;--accent:#A87C2E" data-fx="olive" aria-labelledby="tbTitle">
   <div class="table-head">
     <p class="eyebrow" data-i18n="tb.label" data-reveal>The Joy table</p>
     <h2 class="display" id="tbTitle" data-i18n="tb.title" data-split>Spin the <em>table</em></h2>
@@ -453,7 +473,7 @@
 </main>
 
 <!-- ══ FOOTER ══ -->
-<footer class="footer" id="contact" data-bg style="--bg:#120A07;--ink:#F6EEE3;--accent:#E9C77E" data-fx="gold">
+<footer class="footer" id="contact" data-bg style="--bg:#0B2A2D;--ink:#F2F6F4;--accent:#E9C77E" data-fx="gold">
   <span class="mark mark-foot" aria-hidden="true">
     <svg class="mark-base" viewBox="0 0 1000 560"><text x="520" y="350" text-anchor="middle" fill="url(#g-gold)" filter="url(#f-emboss)">Joy</text></svg>
     <svg class="mark-fx" viewBox="0 0 1000 560">

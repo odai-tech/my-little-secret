@@ -199,6 +199,42 @@
       x.restore();
       return c;
     },
+    oliveLeaf() {
+      const S = 112, c = cv(S), x = c.getContext('2d');
+      x.translate(S / 2, S / 2); x.rotate(rnd(-.5, .5));
+      const len = S * rnd(.4, .46), wid = S * rnd(.09, .12), bend = rnd(-.12, .12) * S;
+      const leaf = () => {
+        x.beginPath();
+        x.moveTo(0, -len);
+        x.bezierCurveTo(wid * 1.6 + bend, -len * .4, wid * 1.2 + bend, len * .5, 0, len);
+        x.bezierCurveTo(-wid * 1.2 + bend, len * .5, -wid * 1.6 + bend, -len * .4, 0, -len);
+        x.closePath();
+      };
+      leaf();
+      const g = x.createLinearGradient(-wid * 1.5, 0, wid * 1.5, 0);
+      g.addColorStop(0, '#5E7A40'); g.addColorStop(.45, '#7F9B5C'); g.addColorStop(.7, '#9DB37D'); g.addColorStop(1, '#C9D4B8');
+      x.fillStyle = g; x.fill();
+      x.save(); leaf(); x.clip();
+      const sh = x.createLinearGradient(0, -len, 0, len);
+      sh.addColorStop(0, 'rgba(255,255,255,.28)'); sh.addColorStop(.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(40,60,30,.2)');
+      x.fillStyle = sh; x.fillRect(-S, -S, S * 2, S * 2);
+      x.restore();
+      x.strokeStyle = 'rgba(230,238,214,.6)'; x.lineWidth = 1.1;
+      x.beginPath(); x.moveTo(0, -len * .92); x.quadraticCurveTo(bend * .5, 0, 0, len * .95); x.stroke();
+      return c;
+    },
+    honeyDrop() {
+      const S = 96, c = cv(S), x = c.getContext('2d'), r = S * .34;
+      x.shadowColor = 'rgba(226,163,58,.45)'; x.shadowBlur = 10;
+      const g = x.createRadialGradient(S * .42, S * .38, r * .1, S / 2, S / 2, r);
+      g.addColorStop(0, '#FFF1C4'); g.addColorStop(.35, '#F6C766'); g.addColorStop(.78, '#D9952E'); g.addColorStop(1, '#A86A18');
+      x.fillStyle = g; x.beginPath(); x.arc(S / 2, S / 2, r, 0, TAU); x.fill();
+      x.shadowBlur = 0;
+      gloss(x, S, S * .38, S * .34, r * .45, .9);
+      x.strokeStyle = 'rgba(255,236,190,.5)'; x.lineWidth = 2;
+      x.beginPath(); x.arc(S / 2, S / 2, r * .84, .15 * Math.PI, .65 * Math.PI); x.stroke();
+      return c;
+    },
     shaving() {
       const S = 112, c = cv(S), x = c.getContext('2d');
       x.translate(S / 2, S / 2); x.rotate(rnd(0, TAU));
@@ -235,6 +271,8 @@
       crumb:       { s: many(P.crumb, 6),      flip: false, size: [5, 12],  fall: [30, 56], sway: 10 },
       chocCrumb:   { s: many(P.crumb, 4, ['#7A4426', '#4A220F', '#2A1208']), flip: false, size: [5, 11], fall: [30, 56], sway: 10 },
       shaving:     { s: many(P.shaving, 5),    flip: true,  size: [18, 32], fall: [22, 38], sway: 16 },
+      oliveLeaf:   { s: many(P.oliveLeaf, 6),  flip: true,  size: [20, 34], fall: [14, 28], sway: 30 },
+      honeyDrop:   { s: many(P.honeyDrop, 2),  flip: false, size: [9, 18],  fall: [24, 42], sway: 6 },
     };
   }
 
@@ -244,6 +282,8 @@
     gold:        { mix: [['goldFlake', 1]], density: 16 },
     'gold-soft': { mix: [['goldFlake', 1]], density: 9 },
     caramel:     { mix: [['goldFlake', .55], ['caramelDrop', .45]], density: 18 },
+    honey:       { mix: [['goldFlake', .5], ['honeyDrop', .5]], density: 16 },
+    olive:       { mix: [['oliveLeaf', .6], ['goldFlake', .4]], density: 12 },
     sprinkles:   { mix: [['sprinkle', .72], ['coconut', .28]], density: 30 },
     rose:        { mix: [['petal', .62], ['pistachio', .38]], density: 15 },
     berries:     { mix: [['blueberry', .45], ['strawberry', .2], ['crumb', .35]], density: 16 },

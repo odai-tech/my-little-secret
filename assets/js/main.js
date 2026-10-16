@@ -325,11 +325,11 @@
 
   /* ── flavour spotlight ─────────────────────────────────────── */
   const FLAVOURS = {
-    blueberry:  { x: 62,   y: 73, bg: '#1B1E3E', ink: '#F3F1FA', accent: '#A9B4FF', fx: 'blueberry' },
-    mango:      { x: 43.5, y: 38, bg: '#FFE6BC', ink: '#4A2A05', accent: '#C2620A', fx: 'mango' },
-    strawberry: { x: 79,   y: 42, bg: '#3A0A12', ink: '#FBEFF1', accent: '#FF8E9E', fx: 'strawberry' },
-    lotus:      { x: 25.5, y: 71, bg: '#EBD6B8', ink: '#3B2410', accent: '#97541C', fx: 'lotus' },
-    chocolate:  { x: 64.5, y: 15, bg: '#22110A', ink: '#F6EEE3', accent: '#E3A04F', fx: 'chocolate' },
+    blueberry:  { x: 62,   y: 73, bg: '#E9EBF7', ink: '#23264D', accent: '#4A50A8', fx: 'blueberry' },
+    mango:      { x: 43.5, y: 38, bg: '#FFF1D9', ink: '#4A2A05', accent: '#B85A06', fx: 'mango' },
+    strawberry: { x: 79,   y: 42, bg: '#FBE8EA', ink: '#4A1119', accent: '#B81530', fx: 'strawberry' },
+    lotus:      { x: 25.5, y: 71, bg: '#F3E6D2', ink: '#3B2410', accent: '#93531C', fx: 'lotus' },
+    chocolate:  { x: 64.5, y: 15, bg: '#EFE3D6', ink: '#3A2216', accent: '#85552F', fx: 'chocolate' },
   };
   const ORDER = Object.keys(FLAVOURS);
   const flavour = { section: $('#flavours'), spot: $('#spot'), cur: 'blueberry', user: false, fx: 62, fy: 73, r: 160, m: null, dirty: true };

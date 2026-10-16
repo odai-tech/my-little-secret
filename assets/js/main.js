@@ -1,23 +1,26 @@
 /* Joy — orchestration: intro, i18n, scroll choreography, chameleon page colour,
-   tilt + glare, flavour spotlight, 3D table, and the order box. */
+   the opening window, flavour spotlight, 3D table, delivery rules and the order box.
+   Performance rules: read layout once (cached), write only transforms/opacity,
+   skip any update whose input did not change, cap WebGL at ~60fps. */
 (function () {
   'use strict';
 
-  /* ── contact ───────────────────────────────────────────────── */
+  /* ── contact & ordering rules ──────────────────────────────── */
   const CONTACT = {
     email: 'mylittlesecret782@gmail.com',
     // TODO: WhatsApp number in international format, digits only (e.g. '972501234567').
     // Leave empty to hide the WhatsApp buttons and order by email only.
     whatsapp: '',
   };
+  const ORDER_DAYS = 2;   // orders need at least this many days' notice
 
   /* ── helpers ───────────────────────────────────────────────── */
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  const lerp = (a, b, k) => a + (b - a) * k;
   let FR = 1;  // frame-time factor, 1 at 60fps
   const ease = (a, b, k) => a + (b - a) * (1 - Math.pow(1 - k, FR));
+  const easeInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
   const html = document.documentElement;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -72,45 +75,72 @@
     renderMenu();
     renderSummary();
     showFlavourText();
+    renderCalendar();
+    setDateLimits();
+    table.front = -1;
     $('#langCurrent').textContent = code.toUpperCase();
     $$('.lang-menu button').forEach(b => b.setAttribute('aria-current', String(b.dataset.lang === code)));
     local.set('joy-lang', code);
     requestAnimationFrame(measureAll);
   }
 
+  /* ── dates: the 2-day rule, shown live ─────────────────────── */
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const addDays = n => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d; };
+  const fmt = (d, o) => { try { return new Intl.DateTimeFormat(lang, o).format(d); } catch (e) { return d.toDateString(); } };
+  const earliestLabel = () => fmt(addDays(ORDER_DAYS), { weekday: 'long', day: 'numeric', month: 'long' });
+  function renderCalendar() {
+    const cal = $('#cal'); if (!cal) return;
+    cal.innerHTML = [0, 1, 2, 3, 4].map(i => {
+      const d = addDays(i);
+      const cls = i < ORDER_DAYS ? 'is-past' : (i === ORDER_DAYS ? 'is-first' : '');
+      const tag = i === 0 ? t('bn.days.today') : (i === ORDER_DAYS ? t('bn.days.first') : '');
+      return `<li class="${cls}"><small>${esc(fmt(d, { weekday: 'short' }))}</small><b>${esc(fmt(d, { day: 'numeric' }))}</b><em>${esc(tag)}</em></li>`;
+    }).join('');
+    $('#earliestLine').innerHTML = esc(t('bn.days.earliest')).replace(/&lt;b&gt;\{date\}&lt;\/b&gt;|\{date\}/, `<b>${esc(earliestLabel())}</b>`);
+  }
+  function setDateLimits() {
+    const inp = $('#fDate'); if (!inp) return;
+    inp.min = ymd(addDays(ORDER_DAYS));
+    $('#dateHint').textContent = t('box.earliest').replace('{date}', earliestLabel());
+  }
+
   /* ── layout cache (read once, animate from scrollY) ────────── */
-  const L = { vw: innerWidth, vh: innerHeight, docH: 1 };
+  const L = { vw: innerWidth, vh: innerHeight, docH: 1, dirty: true };
   const box = (el) => { const r = el.getBoundingClientRect(); return { top: r.top + scrollY, h: r.height, left: r.left, w: r.width }; };
   const visible = (m, y, pad) => m && m.top < y + L.vh + (pad || 0) && m.top + m.h > y - (pad || 0);
 
   const nav = $('#nav'), bar = $('#progressBar'), themeMeta = $('meta[name="theme-color"]');
-  const hero = $('.hero'), heroInner = $('.hero-inner'), heroMark = $('#heroMark'), joyLight = $('#joyLight');
+  const hero = $('.hero'), heroInner = $('#heroInner');
   const bgEls = $$('[data-bg]').map(el => ({ el, m: null }));
-  const chapters = $$('.chapter').map((el, i) => ({
-    el, m: null, dir: i % 2 ? 1 : -1,
-    word: $('.chapter-word', el), img: $('.lid img', el), lid: $('.lid', el),
-  }));
-  const parallax = $$('[data-parallax]').map(el => ({ el, f: parseFloat(el.dataset.parallax) || 0, m: null }));
+  const chapters = $$('.chapter').map(el => ({ el, m: null, img: $('.lid img', el), lid: $('.lid', el), v: NaN }));
+  const parallax = $$('[data-parallax]').map(el => ({ el, f: parseFloat(el.dataset.parallax) || 0, m: null, v: NaN }));
   const ribbons = $$('.ribbon').map(el => ({ el, track: $('.ribbon-track', el), dir: parseFloat(el.dataset.speed) || 1, x: 0, unit: 0, m: null }));
   const manifesto = { el: $('#manifestoText'), words: [], on: -1, m: null };
-  const footerMark = $('.footer-mark');
-  let heroM = null, markM = null, footerM = null;
+  const opening = { el: $('#collection'), head: $('#openingHead'), frame: $('#openingFrame'), cap: $('#openingCaption'), m: null, p: -1 };
+  const glints = [
+    { grad: $('#glintHero'), mark: $('.mark-hero'), m: null, x: 300, y: 160 },
+    { grad: $('#glintFoot'), mark: $('.mark-foot'), m: null, x: 300, y: 160 },
+  ].filter(g => g.grad && g.mark);
+  let heroM = null;
 
   function measureAll() {
     L.vw = innerWidth; L.vh = innerHeight;
     L.docH = document.documentElement.scrollHeight;
     bgEls.forEach(s => { s.m = box(s.el); });
-    chapters.forEach(c => { c.m = box(c.el); });
-    parallax.forEach(p => { p.m = box(p.el.parentElement); });
+    chapters.forEach(c => { c.m = box(c.el); c.v = NaN; });
+    parallax.forEach(p => { p.m = box(p.el.parentElement); p.v = NaN; });
     ribbons.forEach(r => { r.m = box(r.el.parentElement); r.unit = r.track.scrollWidth / 8; });
     manifesto.m = box(manifesto.el);
+    opening.m = box(opening.el); opening.p = -1;
+    glints.forEach(g => { g.m = box(g.mark); });
     heroM = box(hero);
-    markM = box(heroMark);
-    footerM = footerMark ? box(footerMark) : null;
     flavour.m = box(flavour.section);
     flavour.r = flavour.spot.getBoundingClientRect().width * .165;
+    flavour.dirty = true;
     table.m = box(table.stage);
     ringResize();
+    L.dirty = true;
   }
 
   /* ── chameleon page colour + ambient theme ─────────────────── */
@@ -135,6 +165,17 @@
       '<svg class="r-seal" aria-hidden="true"><use href="#seal"/></svg>';
     ribbons.forEach(r => { r.track.innerHTML = unit.repeat(8); r.unit = r.track.scrollWidth / 8; });
   }
+  let scrollVel = 0;
+  function updateRibbons(y, dt) {
+    if (reduce) return;
+    for (const r of ribbons) {
+      if (!visible(r.m, y, 40) || !r.unit) continue;
+      const speed = (38 + Math.min(40, Math.abs(scrollVel)) * 22) * (html.dir === 'rtl' ? -1 : 1);
+      r.x = (r.x + r.dir * speed * dt / 1000) % r.unit;
+      const x = r.x > 0 ? r.x - r.unit : r.x;
+      r.track.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;
+    }
+  }
 
   /* ── manifesto ─────────────────────────────────────────────── */
   function splitManifesto() {
@@ -143,9 +184,8 @@
     manifesto.on = -1;
   }
   function updateManifesto(y) {
-    const m = manifesto.m; if (!m) return;
-    const top = m.top - y;
-    const p = clamp((L.vh * .86 - top) / (m.h + L.vh * .3), 0, 1);
+    const m = manifesto.m; if (!m || !visible(m, y)) return;
+    const p = clamp((L.vh * .86 - (m.top - y)) / (m.h + L.vh * .3), 0, 1);
     const n = Math.round(p * manifesto.words.length);
     if (n !== manifesto.on) {
       manifesto.words.forEach((w, i) => w.classList.toggle('on', i < n));
@@ -153,20 +193,21 @@
     }
   }
 
-  /* ── hero: liquid + embossed wordmark ──────────────────────── */
+  /* ── hero: liquid, wordmark glint, exit ────────────────────── */
   const liquidCanvas = $('#liquid');
-  const liq = {
-    gl: null, mx: L.vw * .5, my: L.vh * .45, tx: L.vw * .5, ty: L.vh * .45,
-    px: L.vw * .5, py: L.vh * .45, stir: 0, flow: 0, lastMove: -1e9, light: { x: 320, y: -60 },
-  };
+  const liq = { gl: null, mx: L.vw * .5, my: L.vh * .45, tx: L.vw * .5, ty: L.vh * .45, px: L.vw * .5, py: L.vh * .45, stir: 0, flow: 0, lastMove: -1e9, last: 0 };
+  let introAt = 0;
   function initLiquid() {
     if (!window.JoyLiquid || !liquidCanvas) return;
     liq.gl = JoyLiquid.create(liquidCanvas, { mobile: !fine || small() });
     if (liq.gl) html.classList.add('has-liquid');
   }
   const DRIP_ZONE = 170;
-  function renderLiquid(now, dt, y, dy) {
+  function renderLiquid(now, y, dy, force) {
     if (!liq.gl || liq.gl.lost) return;
+    // ~60fps cap: 120Hz screens would otherwise double the GPU work for no visible gain
+    if (!force && now - liq.last < 13.5) return;
+    const ldt = now - liq.last; liq.last = now;
     const H = heroM ? heroM.h : L.vh;
     const idle = now - liq.lastMove > 2600;
     if (idle) {  // let it wander on its own (touch screens, idle mouse)
@@ -176,105 +217,100 @@
     const k = idle ? .02 : .085;
     const pmx = liq.mx, pmy = liq.my;
     liq.mx = ease(liq.mx, liq.tx, k); liq.my = ease(liq.my, liq.ty, k);
-    const vx = liq.mx - pmx, vy = liq.my - pmy;
-    const target = clamp((vx - vy * .4) / 22, -1.4, 1.4) + (idle ? .25 : 0);
+    const target = clamp(((liq.mx - pmx) - (liq.my - pmy) * .4) / 22, -1.4, 1.4) + (idle ? .25 : 0);
     liq.stir = ease(liq.stir, target, .05);
     liq.flow += dy * .0012;
     const p = clamp(y / H, 0, 1);
+    const grow = introAt ? 1 - Math.pow(1 - clamp((now - introAt) / 2800, 0, 1), 3) : 0;  // drips pour in after the intro
     liq.gl.render({
-      time: now / 1000,
-      mouseX: liq.mx, mouseY: liq.my,
-      stir: liq.stir,
-      edge: DRIP_ZONE,
-      drip: 58 + 125 * p + 10 * Math.sin(now * .0004),
+      time: now / 1000, mouseX: liq.mx, mouseY: liq.my, stir: liq.stir, edge: DRIP_ZONE,
+      drip: (58 + 125 * p + 10 * Math.sin(now * .0004)) * (.12 + .88 * (reduce ? 1 : grow)),
       flow: liq.flow,
-      lightX: -.55 + (liq.mx / L.vw) * 1.0,
-      lightY: .85 - (liq.my / H) * .75,
+      lightX: -.55 + (liq.mx / L.vw), lightY: .85 - (liq.my / H) * .75,
       stageY: H * .47,
-    }, dt);
+    }, ldt > 100 ? 0 : ldt);
   }
-  function updateHero(now, y) {
+  let heroV = NaN;
+  function updateHero(y) {
     const H = heroM ? heroM.h : L.vh;
-    const p = clamp(y / H, 0, 1);
-    heroInner.style.transform = `translate3d(0, ${(y * .38).toFixed(1)}px, 0)`;
-    heroInner.style.opacity = Math.max(0, 1 - p * 1.9).toFixed(3);
-  }
-  /* one specular light (inside #f-emboss) shines on whichever wordmark is on screen */
-  function updateLight(now, y) {
-    if (!joyLight) return;
-    const onFooter = footerM && visible(footerM, y);
-    const m = onFooter ? footerM : markM;
-    if (!m || (!onFooter && heroM && y > heroM.h)) return;
-    let lx, ly;
-    if (fine && now - liq.lastMove < 2600) {
-      lx = (liq.px - m.left) / m.w * 1000;
-      ly = (liq.py - (m.top - y)) / m.h * 560 - 160;
-    } else {
-      lx = 500 + Math.cos(now * .00045) * 430;
-      ly = -40 + Math.sin(now * .0006) * 90;
-    }
-    liq.light.x = ease(liq.light.x, lx, .08); liq.light.y = ease(liq.light.y, ly, .08);
-    joyLight.setAttribute('x', liq.light.x.toFixed(1));
-    joyLight.setAttribute('y', liq.light.y.toFixed(1));
+    const v = Math.round(clamp(y, 0, H) * 2) / 2;
+    if (v === heroV) return;
+    heroV = v;
+    heroInner.style.transform = `translate3d(0, ${(v * .38).toFixed(1)}px, 0) scale(${(1 - clamp(v / H, 0, 1) * .06).toFixed(4)})`;
+    heroInner.style.opacity = Math.max(0, 1 - (v / H) * 1.9).toFixed(3);
   }
   function revealHero() {
     const line = $('.hero-line');
     if (line) { line.style.setProperty('--d', '1.05s'); line.classList.add('is-in'); }
   }
+  /* the glint is a filter-free gradient on its own layer; the embossed gold below never repaints */
+  let glintLast = 0;
+  function updateGlint(now, y) {
+    if (now - glintLast < 32) return;  // 30fps is plenty for a slow sheen
+    glintLast = now;
+    for (const g of glints) {
+      if (!g.m || !visible(g.m, y)) continue;
+      let tx, ty;
+      if (fine && now - liq.lastMove < 2600) {
+        tx = (liq.px - g.m.left) / g.m.w * 1000;
+        ty = (liq.py - (g.m.top - y)) / g.m.h * 560;
+      } else {
+        tx = 520 + Math.cos(now * .00042) * 380;
+        ty = 230 + Math.sin(now * .00057) * 110;
+      }
+      FR = 2;
+      const nx = ease(g.x, tx, .08), ny = ease(g.y, ty, .08);
+      if (Math.abs(nx - g.x) + Math.abs(ny - g.y) > .5) {
+        g.x = nx; g.y = ny;
+        g.grad.setAttribute('cx', nx.toFixed(1)); g.grad.setAttribute('cy', ny.toFixed(1));
+      }
+    }
+  }
 
-  /* ── chapters, parallax, ribbons per frame ─────────────────── */
+  /* ── opening: the window opens onto the table as you scroll ─ */
+  function updateOpening(y) {
+    const m = opening.m; if (!m || reduce || !visible(m, y, 60)) return;
+    const p = clamp((y - m.top) / Math.max(1, m.h - L.vh), 0, 1);
+    if (Math.abs(p - opening.p) < .0004) return;
+    opening.p = p;
+    const e = easeInOut(clamp(p / .62, 0, 1));
+    const s0 = small() ? .64 : .5, ty0 = L.vh * (small() ? .17 : .15);
+    opening.frame.style.transform = `translate3d(0, ${(ty0 * (1 - e)).toFixed(1)}px, 0) scale(${(s0 + (1 - s0) * e).toFixed(4)})`;
+    const hp = clamp(p / .34, 0, 1);
+    opening.head.style.opacity = (1 - hp).toFixed(3);
+    opening.head.style.transform = `translate3d(0, ${(-hp * 70).toFixed(1)}px, 0) scale(${(1 - hp * .06).toFixed(4)})`;
+    const cp = clamp((p - .58) / .22, 0, 1);
+    opening.cap.style.opacity = cp.toFixed(3);
+    opening.cap.firstElementChild.style.transform = `translate3d(0, ${((1 - cp) * 40).toFixed(1)}px, 0)`;
+  }
+
+  /* ── chapters + parallax ───────────────────────────────────── */
   function updateChapters(y) {
     for (const c of chapters) {
-      if (!visible(c.m, y, 80)) continue;
+      if (!c.img || !visible(c.m, y, 80)) continue;
       const p = clamp((y + L.vh - c.m.top) / (L.vh + c.m.h), 0, 1);
-      c.word.style.setProperty('--mx', `${((.5 - p) * c.dir * L.vw * .55).toFixed(1)}px`);
-      if (c.img) {
-        c.img.style.setProperty('--py', `${((p - .5) * -80).toFixed(1)}px`);
-        c.img.style.setProperty('--ps', (1.16 - p * .1).toFixed(4));
-      }
-      if (!fine && c.lid) {  // on touch screens the light slides across the lid as you scroll
-        c.lid.style.setProperty('--gx', `${(10 + p * 80).toFixed(1)}%`);
-        c.lid.style.setProperty('--gy', `${(8 + p * 30).toFixed(1)}%`);
-      }
+      const v = Math.round((p - .5) * -60 * 2) / 2;
+      if (v !== c.v) { c.v = v; c.img.style.transform = `translate3d(0, ${v}px, 0) scale(1.04)`; }
     }
     for (const q of parallax) {
       if (!visible(q.m, y, 200)) continue;
-      const off = (q.m.top + q.m.h / 2 - (y + L.vh / 2)) * q.f;
-      q.el.style.translate = `0 ${off.toFixed(1)}px`;
-    }
-  }
-  let scrollVel = 0;
-  function updateRibbons(y, dt) {
-    for (const r of ribbons) {
-      if (!visible(r.m, y, 40) || !r.unit) continue;
-      const speed = (38 + Math.abs(scrollVel) * 26) * (html.dir === 'rtl' ? -1 : 1);
-      r.x = (r.x + r.dir * speed * dt / 1000) % r.unit;
-      const x = r.x > 0 ? r.x - r.unit : r.x;
-      r.track.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;
+      const v = Math.round((q.m.top + q.m.h / 2 - (y + L.vh / 2)) * q.f);
+      if (v !== q.v) { q.v = v; q.el.style.translate = `0 ${v}px`; }
     }
   }
 
-  /* ── tilt, magnetic buttons, cursor ────────────────────────── */
-  function bindTilt() {
+  /* ── tilt + magnetic buttons (mouse only) ──────────────────── */
+  function bindPointerFx() {
     if (!fine || reduce) return;
-    $$('[data-tilt], [data-tilt-soft]').forEach(el => {
-      const soft = el.hasAttribute('data-tilt-soft');
+    $$('[data-tilt]').forEach(el => {
       el.addEventListener('pointermove', e => {
         const r = el.getBoundingClientRect();
         const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
-        el.style.setProperty('--ry', `${((px - .5) * (soft ? 7 : 11)).toFixed(2)}deg`);
-        el.style.setProperty('--rx', `${((.5 - py) * (soft ? 6 : 9)).toFixed(2)}deg`);
-        el.style.setProperty('--gx', `${(px * 100).toFixed(1)}%`);
-        el.style.setProperty('--gy', `${(py * 100).toFixed(1)}%`);
-        el.style.setProperty('--go', '1');
+        el.style.setProperty('--ry', `${((px - .5) * 9).toFixed(2)}deg`);
+        el.style.setProperty('--rx', `${((.5 - py) * 7).toFixed(2)}deg`);
       });
-      el.addEventListener('pointerleave', () => {
-        el.style.setProperty('--ry', '0deg'); el.style.setProperty('--rx', '0deg'); el.style.setProperty('--go', '.75');
-      });
+      el.addEventListener('pointerleave', () => { el.style.setProperty('--ry', '0deg'); el.style.setProperty('--rx', '0deg'); });
     });
-  }
-  function bindMagnetic() {
-    if (!fine || reduce) return;
     document.addEventListener('pointermove', e => {
       const b = e.target.closest && e.target.closest('[data-magnetic]');
       if (!b) return;
@@ -286,23 +322,6 @@
       if (b && !b.contains(e.relatedTarget)) b.style.translate = '';
     });
   }
-  const cursor = { el: $('.cursor'), dot: $('.cursor-dot'), ring: $('.cursor-ring'), label: $('#cursorLabel'), x: -100, y: -100, rx: -100, ry: -100 };
-  function bindCursor() {
-    if (!fine || reduce) return;
-    html.classList.add('has-cursor');
-    document.addEventListener('pointerover', e => {
-      const tgt = e.target.closest && e.target.closest('[data-cursor]');
-      if (tgt) { cursor.label.textContent = t('cursor.' + tgt.dataset.cursor); cursor.el.classList.add('is-label'); }
-      else cursor.el.classList.remove('is-label');
-    });
-    document.addEventListener('pointerleave', () => { cursor.x = cursor.y = -100; });
-  }
-  function updateCursor() {
-    if (!html.classList.contains('has-cursor')) return;
-    cursor.rx = ease(cursor.rx, cursor.x, .2); cursor.ry = ease(cursor.ry, cursor.y, .2);
-    cursor.dot.style.transform = `translate3d(${cursor.x}px,${cursor.y}px,0)`;
-    cursor.ring.style.transform = `translate3d(${cursor.rx.toFixed(1)}px,${cursor.ry.toFixed(1)}px,0)`;
-  }
 
   /* ── flavour spotlight ─────────────────────────────────────── */
   const FLAVOURS = {
@@ -313,10 +332,7 @@
     chocolate:  { x: 64.5, y: 15, bg: '#22110A', ink: '#F6EEE3', accent: '#E3A04F', fx: 'chocolate' },
   };
   const ORDER = Object.keys(FLAVOURS);
-  const flavour = {
-    section: $('#flavours'), spot: $('#spot'), cur: 'blueberry', user: false,
-    fx: 62, fy: 73, r: 160, m: null,
-  };
+  const flavour = { section: $('#flavours'), spot: $('#spot'), cur: 'blueberry', user: false, fx: 62, fy: 73, r: 160, m: null, dirty: true };
   function showFlavourText() {
     $('#flavourName').textContent = t(`fl.${flavour.cur}.name`);
     $('#flavourDesc').textContent = t(`fl.${flavour.cur}.desc`);
@@ -325,12 +341,13 @@
     if (!FLAVOURS[name]) return;
     if (byUser) flavour.user = true;
     if (name === flavour.cur && !byUser) return;
-    flavour.cur = name;
+    flavour.cur = name; flavour.dirty = true;
     const f = FLAVOURS[name], s = flavour.section;
     s.style.setProperty('--bg', f.bg); s.style.setProperty('--ink', f.ink); s.style.setProperty('--accent', f.accent);
     $$('#flavourTabs [role="tab"]').forEach(b => {
       const on = b.dataset.flavour === name;
       b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1;
+      if (on && small()) b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduce ? 'auto' : 'smooth' });
     });
     const detail = $('.flavour-detail');
     detail.classList.remove('is-swap'); void detail.offsetWidth; detail.classList.add('is-swap');
@@ -338,6 +355,7 @@
     $('#flavourAdd').dataset.add = 'cc-' + name;
     if (activeBg && activeBg.el === s) applyBg(s);
   }
+  const stepFlavour = d => setFlavour(ORDER[(ORDER.indexOf(flavour.cur) + d + ORDER.length) % ORDER.length], true);
   function bindFlavours() {
     const tabs = $('#flavourTabs');
     tabs.addEventListener('click', e => { const b = e.target.closest('[data-flavour]'); if (b) setFlavour(b.dataset.flavour, true); });
@@ -346,11 +364,21 @@
       if (!(e.key in dirs)) return;
       e.preventDefault();
       let d = dirs[e.key]; if (html.dir === 'rtl' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) d = -d;
-      const next = ORDER[(ORDER.indexOf(flavour.cur) + d + ORDER.length) % ORDER.length];
-      setFlavour(next, true);
-      $(`#flavourTabs [data-flavour="${next}"]`).focus();
+      stepFlavour(d);
+      $(`#flavourTabs [data-flavour="${flavour.cur}"]`).focus();
     });
-    $$('.spot-hit [data-hit]').forEach(b => b.addEventListener('click', () => setFlavour(b.dataset.hit, true)));
+    let swipedAt = 0;
+    $$('.spot-hit [data-hit]').forEach(b => b.addEventListener('click', () => {
+      if (performance.now() - swipedAt > 400) setFlavour(b.dataset.hit, true);
+    }));
+    // swipe across the photo to change flavour on touch screens
+    let sx = null;
+    flavour.spot.addEventListener('pointerdown', e => { sx = e.clientX; });
+    flavour.spot.addEventListener('pointerup', e => {
+      if (sx == null) return;
+      const dx = e.clientX - sx; sx = null;
+      if (Math.abs(dx) > 44) { swipedAt = performance.now(); stepFlavour((dx < 0 ? 1 : -1) * (html.dir === 'rtl' ? -1 : 1)); }
+    });
     setInterval(() => {
       if (flavour.user || reduce || document.hidden || !visible(flavour.m, scrollY)) return;
       setFlavour(ORDER[(ORDER.indexOf(flavour.cur) + 1) % ORDER.length]);
@@ -359,23 +387,42 @@
   function updateFlavour(y) {
     if (!visible(flavour.m, y, 100)) return;
     const f = FLAVOURS[flavour.cur];
-    flavour.fx = ease(flavour.fx, f.x, .075); flavour.fy = ease(flavour.fy, f.y, .075);
+    const moving = Math.abs(flavour.fx - f.x) + Math.abs(flavour.fy - f.y) > .02;
+    if (!moving && !flavour.dirty) return;
+    flavour.dirty = false;
+    flavour.fx = moving ? ease(flavour.fx, f.x, .085) : f.x;
+    flavour.fy = moving ? ease(flavour.fy, f.y, .085) : f.y;
     const s = flavour.spot.style;
     s.setProperty('--fx', flavour.fx.toFixed(2) + '%');
     s.setProperty('--fy', flavour.fy.toFixed(2) + '%');
     s.setProperty('--fr', flavour.r.toFixed(1) + 'px');
-    s.setProperty('--zs', (1.14 + Math.sin(performance.now() * .0006) * .015).toFixed(4));
   }
 
-  /* ── the table: 3D ring ────────────────────────────────────── */
+  /* ── the table: 3D ring that snaps card to card ────────────── */
   const table = {
-    stage: $('#ringStage'), ring: $('#ring'), cards: $$('.ring-card'),
-    angle: 0, vel: 0, drag: false, lastX: 0, lastT: 0, moved: 0, down: null, target: null, m: null,
+    stage: $('#ringStage'), ring: $('#ring'), cards: $$('.ring-card'), shades: $$('.ring-shade'),
+    angle: 0, target: 0, vel: 0, drag: false, lastX: 0, lastT: 0, moved: 0, down: null,
+    idleAt: 0, front: -1, rz: 400, applied: NaN, op: [], m: null,
   };
+  const nearestDetent = a => Math.round(a / 45) * 45;
   function ringResize() {
     const c = table.cards[0]; if (!c) return;
     const cw = c.offsetWidth || 260;
-    table.ring.style.setProperty('--rz', `${Math.round(cw / 2 / Math.tan(Math.PI / 8) + cw * .2)}px`);
+    table.rz = Math.round(cw / 2 / Math.tan(Math.PI / 8) + cw * .2);
+    table.ring.style.setProperty('--rz', `${table.rz}px`);
+    table.applied = NaN;
+  }
+  function ringStep(d) { table.target = nearestDetent(table.target == null ? table.angle : table.target) - d * 45; table.idleAt = performance.now(); }
+  function updateRingCaption() {
+    const n = table.cards.length;
+    const i = ((Math.round(-table.angle / 45) % n) + n) % n;
+    if (i === table.front) return;
+    const first = table.front === -1;
+    table.front = i;
+    const cap = $('#ringCaption'), name = table.cards[i].dataset.name.split('|').map(t).join(' · ');
+    if (first || reduce) { cap.textContent = name; return; }
+    cap.classList.add('is-swap');
+    clearTimeout(cap._t); cap._t = setTimeout(() => { cap.textContent = name; cap.classList.remove('is-swap'); }, 180);
   }
   function bindTable() {
     table.cards.forEach((c, i) => {
@@ -384,8 +431,11 @@
       c.addEventListener('focus', () => {
         const want = -i * 45;
         table.target = table.angle + ((((want - table.angle) % 360) + 540) % 360 - 180);
+        table.idleAt = performance.now();
       });
     });
+    $('#ringPrev').addEventListener('click', () => ringStep(-1));
+    $('#ringNext').addEventListener('click', () => ringStep(1));
     const st = table.stage;
     st.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
@@ -398,7 +448,7 @@
       if (!table.drag) return;
       const now = performance.now(), dx = e.clientX - table.lastX;
       table.lastX = e.clientX; table.moved += Math.abs(dx);
-      const step = dx * (small() ? .4 : .26);
+      const step = dx * (small() ? .42 : .28);
       table.angle += step;
       table.vel = step / Math.max(8, now - table.lastT) * 16;
       table.lastT = now;
@@ -406,29 +456,32 @@
     const end = () => {
       if (!table.drag) return;
       table.drag = false; st.classList.remove('is-drag');
-      if (table.moved < 8 && table.down) openLightbox(table.down);
+      table.idleAt = performance.now();
+      if (table.moved < 8 && table.down) { table.target = nearestDetent(table.angle); openLightbox(table.down); return; }
+      table.target = nearestDetent(table.angle + clamp(table.vel, -18, 18) * 9);  // fling, then settle on a card
     };
     st.addEventListener('pointerup', end);
-    st.addEventListener('pointercancel', () => { table.drag = false; st.classList.remove('is-drag'); });
+    st.addEventListener('pointercancel', end);
   }
-  function updateTable(y, dt, dy) {
-    if (!visible(table.m, y, 120)) return;
-    const f = dt / 16.7;
+  function updateTable(y, now) {
+    if (!visible(table.m, y, 120)) { table.seen = false; return; }
+    if (!table.seen) { table.seen = true; table.idleAt = now; }  // give people a moment before it starts turning
     if (!table.drag) {
+      if (!reduce && now - table.idleAt > 3800 && !document.hidden) ringStep(1);  // gentle auto-advance
       if (table.target != null) {
-        table.angle = ease(table.angle, table.target, .12);
-        if (Math.abs(table.angle - table.target) < .05) table.target = null;
-      } else {
-        table.angle += table.vel * f;
-        table.vel *= Math.pow(.95, f);
-        if (!reduce) table.angle -= (.07 * f + dy * .035);
+        table.angle = ease(table.angle, table.target, .1);
+        if (Math.abs(table.angle - table.target) < .02) table.angle = table.target;
       }
     }
-    table.ring.style.setProperty('--ry', table.angle.toFixed(2) + 'deg');
+    if (table.angle === table.applied) return;
+    table.applied = table.angle;
+    table.ring.style.transform = `translateZ(${-table.rz}px) rotateX(-7deg) rotateY(${table.angle.toFixed(2)}deg)`;
     table.cards.forEach((c, i) => {
       const rel = ((i * 45 + table.angle) % 360 + 540) % 360 - 180;
-      c.style.setProperty('--shade', Math.min(.7, Math.abs(rel) / 180 * .95).toFixed(3));
+      const o = Math.round(Math.min(.7, Math.abs(rel) / 180 * .95) * 100) / 100;
+      if (o !== table.op[i]) { table.op[i] = o; table.shades[i].style.opacity = o; }
     });
+    updateRingCaption();
   }
 
   /* ── lightbox ──────────────────────────────────────────────── */
@@ -493,8 +546,7 @@
     const list = $('#summaryList'), ids = CATALOG.filter(i => bag[i.id]);
     list.innerHTML = ids.map(i => `<li><span>${esc(itemName(i))}</span><b>× ${bag[i.id]}</b></li>`).join('');
     $('#summaryEmpty').hidden = ids.length > 0;
-    const n = Object.values(bag).reduce((a, b) => a + b, 0);
-    $('#boxCount').textContent = n;
+    $('#boxCount').textContent = Object.values(bag).reduce((a, b) => a + b, 0);
   }
   function setQty(id, q) {
     q = clamp(q | 0, 0, 99);
@@ -529,13 +581,13 @@
         opacity: k > .92 ? (1 - k) * 12 : 1,
       });
     }
-    const anim = el.animate(frames, { duration: 950, easing: 'cubic-bezier(.45,0,.25,1)' });
+    const anim = el.animate(frames, { duration: 900, easing: 'cubic-bezier(.45,0,.25,1)' });
     anim.onfinish = () => { el.remove(); bump(); };
   }
   let toastTimer;
   function toast(msg) {
     const el = $('#toast'); el.textContent = msg; el.classList.add('is-on');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('is-on'), 2600);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('is-on'), 2800);
   }
   function addToBox(id, btn) {
     const item = byId(id); if (!item) return;
@@ -543,28 +595,46 @@
     const from = (btn.closest('.chapter') && $('.lid', btn.closest('.chapter'))) ||
                  (btn.closest('.flavours') && $('.spot-ring', btn.closest('.flavours'))) || btn;
     fly(from, item);
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* not allowed */ } }
     toast(t('toast.added').replace('{name}', itemName(item)));
-    const label = $('span', btn);
+    const label = $('span', btn), icon = $('use', btn);
     btn.classList.remove('is-added'); void btn.offsetWidth; btn.classList.add('is-added');
-    if (label) {
-      label.textContent = t('added');
-      clearTimeout(btn._t); btn._t = setTimeout(() => { label.textContent = t('add'); }, 1600);
-    }
+    if (icon) icon.setAttribute('href', '#i-check');
+    if (label) label.textContent = t('added');
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { if (label) label.textContent = t('add'); if (icon) icon.setAttribute('href', '#i-plus'); }, 1700);
   }
+
+  /* order form: delivery in the Haifa area, pickup elsewhere, 2 days' notice */
+  const form = $('#orderForm');
+  const method = () => (form.querySelector('input[name="method"]:checked') || {}).value || 'delivery';
+  function syncMethod() {
+    const pickup = method() === 'pickup';
+    $('#addressField').hidden = pickup;
+    $('#pickupNote').hidden = !pickup;
+  }
+  function dateTooSoon(v) { return v && v < ymd(addDays(ORDER_DAYS)); }
   function compose() {
     const items = CATALOG.filter(i => bag[i.id]);
-    if (!items.length) return null;
-    const f = $('#orderForm');
+    const m = method();
     const lines = [t('msg.hello'), ''].concat(items.map(i => `• ${bag[i.id]} × ${itemName(i)}`), ['']);
-    const name = f.name.value.trim(), date = f.date.value, notes = f.notes.value.trim();
+    lines.push(`${t('msg.method')}: ${t(m === 'pickup' ? 'msg.pickup' : 'msg.delivery')}`);
+    const addr = $('#fAddress').value.trim(), name = $('#fName').value.trim(), date = $('#fDate').value, notes = $('#fNotes').value.trim();
+    if (m === 'delivery' && addr) lines.push(`${t('msg.address')}: ${addr}`);
     if (name) lines.push(`${t('msg.name')}: ${name}`);
-    if (date) lines.push(`${t('msg.date')}: ${date}`);
+    if (date) lines.push(`${t('msg.date')}: ${fmt(new Date(date + 'T12:00:00'), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`);
     if (notes) lines.push(`${t('msg.notes')}: ${notes}`);
     return lines.join('\n').trim();
   }
-  function needItems() {
-    toast(t('box.needItems'));
-    const m = $('#menu'); if (m) m.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  function validate() {
+    if (!CATALOG.some(i => bag[i.id])) {
+      toast(t('box.needItems'));
+      const m = $('#menu'); if (m) m.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      return false;
+    }
+    if (method() === 'delivery' && !$('#fAddress').value.trim()) { toast(t('box.needAddress')); $('#fAddress').focus(); return false; }
+    if (dateTooSoon($('#fDate').value)) { toast(t('box.tooSoon')); $('#fDate').focus(); return false; }
+    return true;
   }
   function bindBox() {
     document.addEventListener('click', e => {
@@ -572,22 +642,36 @@
       if (add) { addToBox(add.dataset.add, add); return; }
       const step = e.target.closest('[data-step]');
       if (step) {
-        const id = step.closest('.menu-row').dataset.id;
-        const d = +step.dataset.step;
+        const id = step.closest('.menu-row').dataset.id, d = +step.dataset.step;
         setQty(id, (bag[id] || 0) + d);
         if (d > 0) bump();
       }
     });
+    // remember the customer's details on this device
+    let saved = {};
+    try { saved = JSON.parse(local.get('joy-form') || '{}') || {}; } catch (e) { saved = {}; }
+    if (saved.method === 'pickup') $('#mPickup').checked = true;
+    if (saved.address) $('#fAddress').value = saved.address;
+    if (saved.name) $('#fName').value = saved.name;
+    syncMethod();
+    form.addEventListener('input', () => {
+      local.set('joy-form', JSON.stringify({ method: method(), address: $('#fAddress').value, name: $('#fName').value }));
+    });
+    form.addEventListener('change', e => {
+      if (e.target.name === 'method') syncMethod();
+      if (e.target.id === 'fDate' && dateTooSoon(e.target.value)) { toast(t('box.tooSoon')); e.target.value = ''; }
+    });
+    form.addEventListener('submit', e => e.preventDefault());
     $('#sendMail').addEventListener('click', () => {
-      const msg = compose(); if (!msg) return needItems();
-      location.href = `mailto:${CONTACT.email}?subject=${encodeURIComponent(t('msg.subject'))}&body=${encodeURIComponent(msg.replace(/\n/g, '\r\n'))}`;
+      if (!validate()) return;
+      location.href = `mailto:${CONTACT.email}?subject=${encodeURIComponent(t('msg.subject'))}&body=${encodeURIComponent(compose().replace(/\n/g, '\r\n'))}`;
     });
     if (CONTACT.whatsapp) {
       const wa = $('#sendWa'), fw = $('#footerWa');
       wa.hidden = false;
       wa.addEventListener('click', () => {
-        const msg = compose(); if (!msg) return needItems();
-        window.open(`https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+        if (!validate()) return;
+        window.open(`https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent(compose())}`, '_blank', 'noopener');
       });
       if (fw) { fw.hidden = false; fw.href = `https://wa.me/${CONTACT.whatsapp}`; fw.target = '_blank'; fw.rel = 'noopener'; }
     }
@@ -613,7 +697,7 @@
     const setSheet = open => {
       menuBtn.setAttribute('aria-expanded', String(open));
       if (open) { sheet.hidden = false; requestAnimationFrame(() => sheet.classList.add('is-open')); nav.classList.add('is-solid'); }
-      else { sheet.classList.remove('is-open'); setTimeout(() => { if (!sheet.classList.contains('is-open')) sheet.hidden = true; }, 900); }
+      else { sheet.classList.remove('is-open'); setTimeout(() => { if (!sheet.classList.contains('is-open')) sheet.hidden = true; }, 850); }
       document.body.style.overflow = open ? 'hidden' : '';
     };
     menuBtn.addEventListener('click', () => setSheet(menuBtn.getAttribute('aria-expanded') !== 'true'));
@@ -622,8 +706,9 @@
     nav._sheetOpen = () => sheet.classList.contains('is-open');
   }
   function updateNav(y, dy) {
-    nav.classList.toggle('is-solid', y > 40 || (nav._sheetOpen && nav._sheetOpen()));
-    if (nav._sheetOpen && nav._sheetOpen()) return;
+    const open = nav._sheetOpen && nav._sheetOpen();
+    nav.classList.toggle('is-solid', y > 40 || open);
+    if (open) return;
     if (y > 520 && dy > 4) nav.classList.add('is-hidden');
     else if (dy < -4 || y < 300) nav.classList.remove('is-hidden');
   }
@@ -634,109 +719,107 @@
     if (!('IntersectionObserver' in window)) { $$('[data-reveal],[data-split],.chapter').forEach(el => el.classList.add('is-in')); return; }
     const io = new IntersectionObserver(entries => entries.forEach(e => {
       if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
-    }), { threshold: .16, rootMargin: '0px 0px -6% 0px' });
+    }), { threshold: .14, rootMargin: '0px 0px -6% 0px' });
     $$('[data-reveal], [data-split], .chapter').forEach(el => { if (!el.closest('.hero')) io.observe(el); });
   }
 
-  /* ── intro: band, seal, lid lifts ──────────────────────────── */
-  function intro(done) {
+  /* ── intro: band, seal, lid lifts (first visit of the session only) ── */
+  function intro() {
     const pre = $('#preloader');
-    const finish = () => { html.classList.add('is-ready'); revealHero(); done && done(); };
-    if (!pre || reduce) { if (pre) pre.classList.add('is-done'); finish(); return; }
-    const quick = !!session.get('joy-intro');
+    const finish = () => { html.classList.add('is-ready'); introAt = performance.now(); revealHero(); };
+    if (!pre || reduce || session.get('joy-intro')) { if (pre) pre.classList.add('is-done'); finish(); return; }
     html.classList.add('is-loading');
-    const count = $('#preCount'), t0 = performance.now(), minT = quick ? 650 : 2000;
-    let ready = false, shown = 0;
+    const t0 = performance.now();
+    let ready = false;
     const fontLoads = document.fonts && document.fonts.load
       ? Promise.all([document.fonts.load('400 120px "Great Vibes"'), document.fonts.load('400 60px Fraunces'), document.fonts.load('italic 400 60px Fraunces')]).catch(() => {})
       : Promise.resolve();
-    Promise.race([fontLoads, new Promise(r => setTimeout(r, 3500))]).then(() => { ready = true; });
+    Promise.race([fontLoads, new Promise(r => setTimeout(r, 2200))]).then(() => { ready = true; });
     requestAnimationFrame(() => pre.classList.add('is-band'));
-    setTimeout(() => pre.classList.add('is-seal'), quick ? 120 : 620);
-    (function tick() {
-      const el = performance.now() - t0;
-      // time-based so a slow first frame never stalls the counter
-      const k = Math.min(1, el / minT), eased = 1 - Math.pow(1 - k, 3);
-      shown = ready ? Math.max(shown, eased * 100) : Math.min(90, eased * 100);
-      count.textContent = Math.round(shown);
-      if (ready && el >= minT) {
-        count.textContent = '100';
-        pre.classList.add('is-open');
-        html.classList.remove('is-loading');
-        session.set('joy-intro', '1');
-        setTimeout(finish, 280);
-        setTimeout(() => pre.classList.add('is-done'), 1500);
-        return;
-      }
-      requestAnimationFrame(tick);
+    setTimeout(() => pre.classList.add('is-seal'), 360);
+    (function tryOpen() {
+      if (!ready || performance.now() - t0 < 1250) { setTimeout(tryOpen, 50); return; }
+      pre.classList.add('is-open');
+      html.classList.remove('is-loading');
+      session.set('joy-intro', '1');
+      setTimeout(finish, 200);
+      setTimeout(() => pre.classList.add('is-done'), 1250);
     })();
   }
 
-  /* ── main loop ─────────────────────────────────────────────── */
-  let lastT = performance.now(), lastY = scrollY;
+  /* ── main loop: only what changed, only what's on screen ───── */
+  let lastT = performance.now(), lastY = -1;
   function frame(now) {
-    const dt = Math.min(64, now - lastT); lastT = now;
-    const y = scrollY, dy = y - lastY; lastY = y;
-    FR = dt / 16.7;
+    const dt = Math.min(64, now - lastT); lastT = now; FR = dt / 16.7;
+    const y = scrollY, dy = lastY < 0 ? 0 : y - lastY, moved = y !== lastY || L.dirty;
+    lastY = y;
     scrollVel = ease(scrollVel, dy, .15);
-
-    updateNav(y, dy);
-    bar.style.transform = `scaleX(${clamp(y / Math.max(1, L.docH - L.vh), 0, 1).toFixed(4)})`;
-    updateChameleon(y);
-    if (heroM && y < heroM.h + DRIP_ZONE + 40) {
-      updateHero(now, y);
-      if (!reduce) renderLiquid(now, dt, y, dy);
+    if (moved) {
+      updateNav(y, dy);
+      bar.style.transform = `scaleX(${clamp(y / Math.max(1, L.docH - L.vh), 0, 1).toFixed(4)})`;
+      updateChameleon(y);
+      updateManifesto(y);
+      updateOpening(y);
+      updateChapters(y);
+      L.dirty = false;
     }
-    if (visible(manifesto.m, y)) updateManifesto(y);
+    const inHero = heroM && y < heroM.h + DRIP_ZONE + 40;
+    if (inHero) {
+      updateHero(y);
+      if (!reduce) renderLiquid(now, y, dy);
+    }
     updateRibbons(y, dt);
-    updateChapters(y);
     updateFlavour(y);
-    updateTable(y, dt, dy);
-    updateCursor();
-    if (!reduce) updateLight(now, y);
-    if (window.JoyFX && !reduce) JoyFX.tick(dt, dy);
+    updateTable(y, now);
+    if (!reduce) updateGlint(now, y);
+    FR = dt / 16.7;
+    if (window.JoyFX && !reduce) JoyFX.tick(dt, dy, heroM && y < heroM.h * .7);
     requestAnimationFrame(frame);
   }
 
   /* ── boot ──────────────────────────────────────────────────── */
   function boot() {
-    let saved = local.get('joy-lang');
+    const saved = local.get('joy-lang');
     const nav2 = (navigator.language || 'en').slice(0, 2).toLowerCase();
     applyLang(saved || (I18N[nav2] ? nav2 : 'en'));
 
+    if (reduce) opening.el.classList.add('is-static');
     initLiquid();
-    if (window.JoyFX && !reduce) JoyFX.init($('#fxBack'), $('#fxFront'));
-    bindNav(); bindTilt(); bindMagnetic(); bindCursor(); bindFlavours(); bindTable(); bindLightbox(); bindBox(); bindReveals();
+    if (window.JoyFX && !reduce) JoyFX.init($('#fx'));
+    bindNav(); bindPointerFx(); bindFlavours(); bindTable(); bindLightbox(); bindBox(); bindReveals();
     setFlavour('blueberry');
 
     document.addEventListener('pointermove', e => {
-      cursor.x = e.clientX; cursor.y = e.clientY;
       liq.px = e.clientX; liq.py = e.clientY;
       liq.tx = e.clientX; liq.ty = e.clientY + scrollY;
-      liq.lastMove = performance.now();
+      if (e.pointerType === 'mouse') liq.lastMove = performance.now();
       if (window.JoyFX) { JoyFX.mouse.x = e.clientX; JoyFX.mouse.y = e.clientY; }
     }, { passive: true });
 
-    let rz;
+    let rz, lastW = innerWidth;
     const onResize = () => {
       clearTimeout(rz);
       rz = setTimeout(() => {
-        if (liq.gl) liq.gl.resize();
-        if (window.JoyFX) JoyFX.resize();
+        // phones fire resize when the URL bar slides; only rebuild the canvases on real size changes
+        if (innerWidth !== lastW || !small()) {
+          lastW = innerWidth;
+          if (liq.gl) liq.gl.resize();
+          if (window.JoyFX) JoyFX.resize();
+        }
         measureAll();
-        if (reduce) renderLiquid(performance.now(), 0, scrollY, 0);
-      }, 120);
+        if (reduce) renderLiquid(performance.now(), scrollY, 0, true);
+      }, 140);
     };
     addEventListener('resize', onResize);
     if ('ResizeObserver' in window) new ResizeObserver(onResize).observe(document.body);
     addEventListener('load', measureAll);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureAll);
+    // a new day moves the earliest delivery date
+    setInterval(() => { renderCalendar(); setDateLimits(); }, 60 * 60 * 1000);
 
     measureAll();
-    if (CONTACT.whatsapp) $('#sendWa').hidden = false;
-
     intro();
-    if (reduce) { renderLiquid(performance.now(), 0, scrollY, 0); }
+    if (reduce) renderLiquid(performance.now(), scrollY, 0, true);
     requestAnimationFrame(frame);
   }
 

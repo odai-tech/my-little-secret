@@ -1,8 +1,8 @@
 /* Joy — ambient ingredients.
    Every sprite is painted once onto an offscreen canvas (gradients, gloss,
-   seeds, veins) and then drifted, tumbled and flipped in fake 3D across two
-   depth layers: a sharp back layer behind the content and a few big,
-   out-of-focus pieces in front. Each section picks a "theme". */
+   seeds, veins) and then drifted, tumbled and flipped in fake 3D on one
+   canvas that sits behind the content, so nothing ever crosses a photo.
+   Each section picks a "theme". */
 (function () {
   'use strict';
 
@@ -220,13 +220,6 @@
   /* ───────────── sprite library ───────────── */
   const SPRINKLES = ['#F25C54', '#FFD23F', '#3BCEAC', '#4D96FF', '#FF8FAB', '#FFFFFF', '#9B5DE5', '#FF9F1C'];
   let LIB = null;
-  // out-of-focus copies for the front layer (cheaper than blurring the whole canvas)
-  const CAN_FILTER = (() => { try { return 'filter' in document.createElement('canvas').getContext('2d'); } catch (e) { return false; } })();
-  function blurred(src) {
-    const pad = 14, c = cv(src.width + pad * 2, src.height + pad * 2), x = c.getContext('2d');
-    x.filter = 'blur(5px)'; x.drawImage(src, pad, pad);
-    return c;
-  }
   function buildLib() {
     const many = (fn, n, arg) => Array.from({ length: n }, () => fn(arg));
     LIB = {
@@ -243,128 +236,114 @@
       chocCrumb:   { s: many(P.crumb, 4, ['#7A4426', '#4A220F', '#2A1208']), flip: false, size: [5, 11], fall: [30, 56], sway: 10 },
       shaving:     { s: many(P.shaving, 5),    flip: true,  size: [18, 32], fall: [22, 38], sway: 16 },
     };
-    Object.values(LIB).forEach(d => { d.b = CAN_FILTER ? d.s.map(blurred) : d.s; });
   }
 
-  /* themes: [sprite, weight], density per 1M css px, front-layer count */
+  /* themes: [sprite, weight] and density per 1M css px */
   const THEMES = {
-    none:        { mix: [], density: 0, front: 0 },
-    gold:        { mix: [['goldFlake', 1]], density: 22, front: 2 },
-    'gold-soft': { mix: [['goldFlake', 1]], density: 12, front: 1 },
-    caramel:     { mix: [['goldFlake', .55], ['caramelDrop', .45]], density: 26, front: 2 },
-    sprinkles:   { mix: [['sprinkle', .72], ['coconut', .28]], density: 46, front: 3 },
-    rose:        { mix: [['petal', .62], ['pistachio', .38]], density: 22, front: 2 },
-    berries:     { mix: [['blueberry', .45], ['strawberry', .2], ['crumb', .35]], density: 24, front: 2 },
-    blueberry:   { mix: [['blueberry', .78], ['crumb', .22]], density: 26, front: 2 },
-    mango:       { mix: [['mango', .82], ['crumb', .18]], density: 24, front: 2 },
-    strawberry:  { mix: [['strawberry', .78], ['crumb', .22]], density: 22, front: 2 },
-    lotus:       { mix: [['crumb', 1]], density: 52, front: 3 },
-    chocolate:   { mix: [['shaving', .55], ['chocCrumb', .45]], density: 24, front: 2 },
+    none:        { mix: [], density: 0 },
+    gold:        { mix: [['goldFlake', 1]], density: 16 },
+    'gold-soft': { mix: [['goldFlake', 1]], density: 9 },
+    caramel:     { mix: [['goldFlake', .55], ['caramelDrop', .45]], density: 18 },
+    sprinkles:   { mix: [['sprinkle', .72], ['coconut', .28]], density: 30 },
+    rose:        { mix: [['petal', .62], ['pistachio', .38]], density: 15 },
+    berries:     { mix: [['blueberry', .45], ['strawberry', .2], ['crumb', .35]], density: 16 },
+    blueberry:   { mix: [['blueberry', .78], ['crumb', .22]], density: 17 },
+    mango:       { mix: [['mango', .82], ['crumb', .18]], density: 16 },
+    strawberry:  { mix: [['strawberry', .78], ['crumb', .22]], density: 15 },
+    lotus:       { mix: [['crumb', 1]], density: 32 },
+    chocolate:   { mix: [['shaving', .55], ['chocCrumb', .45]], density: 16 },
   };
-
   function pickType(theme) {
     let r = Math.random(), acc = 0;
     for (const [k, w] of theme.mix) { acc += w; if (r <= acc) return k; }
     return theme.mix[theme.mix.length - 1][0];
   }
 
-  /* ───────────── layer ───────────── */
-  function Layer(canvas, front) {
-    this.c = canvas; this.x = canvas.getContext('2d'); this.front = front;
-    this.items = []; this.w = 1; this.h = 1; this.dpr = 1;
-  }
-  Layer.prototype.resize = function () {
-    this.dpr = Math.min(window.devicePixelRatio || 1, this.front ? 1 : 2);
-    this.w = window.innerWidth; this.h = window.innerHeight;
-    this.c.width = Math.round(this.w * this.dpr); this.c.height = Math.round(this.h * this.dpr);
-  };
-  Layer.prototype.spawn = function (theme, anywhere) {
-    if (!theme.mix.length) return null;
-    const type = pickType(theme), def = LIB[type];
-    const z = this.front ? rnd(.85, 1) : rnd(.35, 1);
-    const scale = Math.min(1, Math.max(.7, this.w / 1300));
-    const img = pick(this.front ? def.b : def.s);
-    const padK = (this.front && def.b !== def.s) ? img.width / (img.width - 28) : 1;  // blurred copies carry 14px padding
-    const size = rnd(def.size[0], def.size[1]) * (this.front ? 2.6 * padK : (.55 + z * .55)) * scale;
-    return {
-      type, def, img, z, size,
-      x: rnd(-20, this.w + 20),
-      y: anywhere ? rnd(-40, this.h + 40) : rnd(-140, -30),
-      vy: rnd(def.fall[0], def.fall[1]) * (.5 + z * .7) * (this.front ? 1.4 : 1),
-      vx: 0, sway: def.sway * rnd(.5, 1.2), swayF: rnd(.3, .9), ph: rnd(0, TAU),
-      rot: rnd(0, TAU), vr: rnd(-.9, .9) * (def.flip ? 1 : .5),
-      flip: rnd(0, TAU), vf: def.flip ? rnd(1, 2.6) : 0,
-      alpha: 0, target: this.front ? rnd(.5, .75) : rnd(.55, 1),
-      dying: false, theme,
-    };
-  };
-
   const FX = {
-    back: null, front: null, theme: THEMES.none, themeName: 'none',
-    mouse: { x: -9999, y: -9999 }, t: 0, enabled: true,
+    c: null, x: null, w: 1, h: 1, dpr: 1, items: [],
+    theme: THEMES.none, themeName: 'none', mouse: { x: -9999, y: -9999 }, enabled: true, dirty: false,
 
-    init(back, front) {
+    init(canvas) {
       buildLib();
-      this.back = new Layer(back, false);
-      this.front = new Layer(front, true);
-      if (!CAN_FILTER) front.classList.add('css-blur');
+      this.c = canvas; this.x = canvas.getContext('2d');
       this.resize();
     },
     resize() {
-      if (!this.back) return;
-      this.back.resize(); this.front.resize();
+      if (!this.c) return;
+      this.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      this.w = window.innerWidth; this.h = window.innerHeight;
+      this.c.width = Math.round(this.w * this.dpr); this.c.height = Math.round(this.h * this.dpr);
+      this.dirty = true;
     },
     setTheme(name) {
       if (!THEMES[name] || name === this.themeName) return;
       this.themeName = name; this.theme = THEMES[name];
-      if (!this.back) return;
       // pieces of the previous theme fade out and are replaced in place
-      [this.back, this.front].forEach(L => L.items.forEach(p => { if (p.theme !== this.theme) p.dying = true; }));
+      this.items.forEach(p => { if (p.theme !== this.theme) p.dying = true; });
     },
-    tick(dt, scrollDy) {
-      if (!this.back || !this.enabled) return;
-      this.t += dt;
+    spawn(anywhere) {
+      const theme = this.theme;
+      if (!theme.mix.length) return null;
+      const type = pickType(theme), def = LIB[type];
+      const z = rnd(.35, 1);
+      const scale = Math.min(1, Math.max(.7, this.w / 1300));
+      return {
+        def, img: pick(def.s), z, theme,
+        size: rnd(def.size[0], def.size[1]) * (.55 + z * .55) * scale,
+        x: rnd(-20, this.w + 20),
+        y: anywhere ? rnd(-40, this.h + 40) : rnd(-140, -30),
+        vy: rnd(def.fall[0], def.fall[1]) * (.5 + z * .7),
+        vx: 0, sway: def.sway * rnd(.5, 1.2), swayF: rnd(.3, .9), ph: rnd(0, TAU),
+        rot: rnd(0, TAU), vr: rnd(-.9, .9) * (def.flip ? 1 : .5),
+        flip: rnd(0, TAU), vf: def.flip ? rnd(1, 2.6) : 0,
+        alpha: 0, target: rnd(.55, 1), dying: false,
+      };
+    },
+    /* paused: keep state, just stop drawing (e.g. while the hero covers the screen) */
+    tick(dt, scrollDy, paused) {
+      if (!this.c || !this.enabled) return;
+      const x = this.x;
+      if (paused) {
+        if (this.dirty || this.items.length) { x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, this.c.width, this.c.height); this.dirty = false; }
+        this.items.length = 0;
+        return;
+      }
       const sec = Math.min(dt, 50) / 1000;
-      [this.back, this.front].forEach(L => {
-        const area = L.w * L.h / 1e6;
-        const want = L.front ? this.theme.front : Math.round(this.theme.density * area * (L.w < 700 ? .75 : 1));
-        const live = L.items.filter(p => !p.dying).length;
-        if (live < want && Math.random() < .5) {
-          const p = L.spawn(this.theme, L.items.length < want * .4);
-          if (p) L.items.push(p);
+      const want = Math.round(this.theme.density * (this.w * this.h / 1e6) * (this.w < 700 ? .6 : 1));
+      let live = 0;
+      for (const p of this.items) if (!p.dying) live++;
+      if (live < want && Math.random() < .4) { const p = this.spawn(this.items.length < want * .4); if (p) this.items.push(p); }
+      if (!this.items.length && !this.dirty) return;
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      x.clearRect(0, 0, this.c.width, this.c.height);
+      this.dirty = false;
+      const mx = this.mouse.x, my = this.mouse.y, d = this.dpr;
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const p = this.items[i];
+        // fall + sway + depth parallax against the page scroll
+        p.y += p.vy * sec - scrollDy * (.18 + p.z * .42);
+        p.ph += p.swayF * sec;
+        p.x += Math.sin(p.ph * TAU * .25) * p.sway * sec + p.vx * sec;
+        p.vx *= .94;
+        const dx = p.x - mx, dy = p.y - my, d2 = dx * dx + dy * dy;
+        if (d2 < 16000) { const f = (1 - d2 / 16000) * 900, dd = Math.sqrt(d2) || 1; p.vx += dx / dd * f * sec; }
+        p.rot += p.vr * sec; p.flip += p.vf * sec;
+        p.alpha += ((p.dying ? 0 : p.target) - p.alpha) * Math.min(1, sec * (p.dying ? 3 : 1.6));
+        const out = p.y > this.h + 160 || p.x < -160 || p.x > this.w + 160;
+        if ((p.dying && p.alpha < .02) || out) {
+          if (!p.dying && live <= want) { const n = this.spawn(false); if (n) { this.items[i] = n; continue; } }
+          this.items.splice(i, 1); if (!p.dying) live--; continue;
         }
-        const x = L.x;
-        x.setTransform(1, 0, 0, 1, 0, 0);
-        x.clearRect(0, 0, L.c.width, L.c.height);
-        const mx = this.mouse.x, my = this.mouse.y;
-        for (let i = L.items.length - 1; i >= 0; i--) {
-          const p = L.items[i];
-          // fall + sway + depth parallax against the page scroll
-          p.y += p.vy * sec - scrollDy * (L.front ? 1.25 : (.18 + p.z * .42));
-          p.ph += p.swayF * sec;
-          p.x += (Math.sin(p.ph * TAU * .25) * p.sway * sec) + p.vx * sec;
-          p.vx *= .94;
-          const dx = p.x - mx, dy = p.y - my, d2 = dx * dx + dy * dy;
-          if (d2 < 16000 && !L.front) { const f = (1 - d2 / 16000) * 900; const d = Math.sqrt(d2) || 1; p.vx += dx / d * f * sec; p.y += dy / d * f * sec * .05; }
-          p.rot += p.vr * sec; p.flip += p.vf * sec;
-          p.alpha += ((p.dying ? 0 : p.target) - p.alpha) * Math.min(1, sec * (p.dying ? 3 : 1.6));
-          const out = p.y > L.h + 160 || p.x < -160 || p.x > L.w + 160;
-          if ((p.dying && p.alpha < .02) || out) {
-            const live2 = L.items.filter(q => !q.dying).length;
-            if (!p.dying && live2 <= want) { const n = L.spawn(this.theme, false); if (n) { L.items[i] = n; continue; } }
-            L.items.splice(i, 1); continue;
-          }
-          if (p.y < -200) { p.y += L.h + 340; }  // scrolled up past the top: recycle at the bottom
-          // flip = squash along the piece's own axis, which reads as a 3D tumble
-          const fl = p.def.flip ? Math.cos(p.flip) : 1;
-          x.globalAlpha = p.alpha * (p.def.flip ? (.55 + .45 * Math.abs(fl)) : 1);
-          x.setTransform(L.dpr, 0, 0, L.dpr, p.x * L.dpr, p.y * L.dpr);
-          x.rotate(p.rot);
-          if (p.def.flip) x.scale(fl, 1);
-          x.drawImage(p.img, -p.size / 2, -p.size / 2, p.size, p.size);
-        }
-        x.globalAlpha = 1;
-      });
+        if (p.y < -200) p.y += this.h + 340;  // scrolled up past the top: recycle at the bottom
+        // flip = squash along the piece's own axis, which reads as a 3D tumble
+        const fl = p.def.flip ? Math.cos(p.flip) : 1;
+        x.globalAlpha = p.alpha * (p.def.flip ? (.55 + .45 * Math.abs(fl)) : 1);
+        x.setTransform(d, 0, 0, d, p.x * d, p.y * d);
+        x.rotate(p.rot);
+        if (p.def.flip) x.scale(fl, 1);
+        x.drawImage(p.img, -p.size / 2, -p.size / 2, p.size, p.size);
+      }
+      x.globalAlpha = 1;
     },
   };
 

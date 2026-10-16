@@ -1,16 +1,19 @@
 /* Joy — molten chocolate & caramel hero.
    One full-screen fragment shader: a slow, silky liquid surface (iterated
-   sine warping), lit like a studio pour (Blinn-Phong + softbox reflection),
-   with real drips hanging off the bottom edge (signed-distance round cones,
-   smooth-unioned into the pour) that cast a soft shadow on the page below.
-   The cursor stirs the surface. */
+   sine warping), lit like a studio pour (three specular lobes + softbox
+   reflection), with real drips hanging off the bottom edge (signed-distance
+   round cones, smooth-unioned into the pour) that cast a soft shadow on the
+   page below. The cursor stirs the surface.
+   Speed: surface normals come from hardware derivatives (one field sample per
+   pixel), so it can render at the screen's native resolution. */
 (function () {
   'use strict';
 
   const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 
-  const FRAG = `
-precision highp float;
+  const frag = (deriv, precision) => `
+${deriv ? '#extension GL_OES_standard_derivatives : enable\n#define DERIV 1' : ''}
+precision ${precision} float;
 uniform vec2  uRes;
 uniform float uDpr;
 uniform float uTime;
@@ -84,8 +87,20 @@ void main(){
   float W = uRes.x / uDpr;
   float H = uRes.y / uDpr;
 
+  // evaluated by every pixel, before any early exit, so derivatives stay valid
   float d = shape(px, W);
-  float aIn = clamp(0.5 - d, 0.0, 1.0);
+  vec2 f0 = field(px);
+#ifdef DERIV
+  vec2 gh = vec2(dFdx(f0.x), dFdy(f0.x)) * uDpr;
+  vec2 gd = vec2(dFdx(d), dFdy(d)) * uDpr;
+#else
+  float e = 1.5;
+  vec2 gh = vec2(field(px + vec2(e, 0.0)).x - f0.x, field(px + vec2(0.0, e)).x - f0.x) / e;
+  vec2 gd = vec2(0.0, -1.0);
+  if (px.y < uEdge + 46.0) gd = vec2(shape(px + vec2(1.0, 0.0), W) - d, shape(px + vec2(0.0, 1.0), W) - d);
+#endif
+
+  float aIn = clamp(0.5 - d * uDpr, 0.0, 1.0);
   float shadowA = 0.0;
   if (px.y < uEdge + 8.0) {
     float ds = shape(px + vec2(-2.5, 8.0), W);
@@ -93,21 +108,10 @@ void main(){
   }
   if (aIn <= 0.0 && shadowA < 0.002) { gl_FragColor = vec4(0.0); return; }
 
-  float e = 1.6;
-  vec2 f0 = field(px);
-  vec2 fx = field(px + vec2(e, 0.0));
-  vec2 fy = field(px + vec2(0.0, e));
-  float k = 95.0;
-  vec3 n = normalize(vec3(-(fx.x - f0.x) / e * k, -(fy.x - f0.x) / e * k, 1.0));
-
+  vec3 n = normalize(vec3(-gh * 95.0, 1.0));
   // rounded bead along the pour edge and the drips
-  float rim = 0.0;
-  if (px.y < uEdge + 46.0) {
-    float gx = shape(px + vec2(1.0, 0.0), W) - d;
-    float gy = shape(px + vec2(0.0, 1.0), W) - d;
-    rim = 1.0 - smoothstep(0.0, 15.0, -d);
-    n = normalize(n + vec3(vec2(gx, gy) * rim * 2.4, 0.0));
-  }
+  float rim = 1.0 - smoothstep(0.0, 15.0, -d);
+  n = normalize(n + vec3(gd * rim * 2.4, 0.0));
 
   vec3 V  = vec3(0.0, 0.0, 1.0);
   vec3 L  = normalize(vec3(uLight, 0.9));
@@ -159,6 +163,17 @@ void main(){
     return s;
   }
 
+  function link(gl, deriv, precision) {
+    const vs = compile(gl, gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl, gl.FRAGMENT_SHADER, frag(deriv, precision));
+    if (!vs || !fs) return null;
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    return gl.getProgramParameter(prog, gl.LINK_STATUS) ? prog : null;
+  }
+
   function create(canvas, opts) {
     opts = opts || {};
     let gl;
@@ -167,14 +182,11 @@ void main(){
     } catch (e) { gl = null; }
     if (!gl) return null;
 
-    const vs = compile(gl, gl.VERTEX_SHADER, VERT);
-    const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG);
-    if (!vs || !fs) return null;
-    const prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+    const precision = hp && hp.precision > 0 ? 'highp' : 'mediump';
+    const deriv = !!gl.getExtension('OES_standard_derivatives');
+    const prog = (deriv && link(gl, true, precision)) || link(gl, false, precision);
+    if (!prog) return null;
     gl.useProgram(prog);
 
     const buf = gl.createBuffer();
@@ -191,10 +203,12 @@ void main(){
     let lost = false;
     canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); lost = true; }, false);
 
+    // pixel budget: native resolution (up to 2x) where the GPU allows it
     const st = {
       cssW: 1, cssH: 1, scale: 1,
-      budget: opts.mobile ? 380000 : 1250000,
-      slow: 0, frames: 0,
+      // low-memory phones start lighter; everything else starts at full resolution and adapts down if needed
+      budget: opts.mobile ? ((navigator.deviceMemory && navigator.deviceMemory <= 4) ? 1400000 : 2100000) : 3600000,
+      floor: 520000, slow: 0, frames: 0, warm: 0,
     };
 
     function resize() {
@@ -211,13 +225,16 @@ void main(){
     /* s: { time, mouseX, mouseY (css px, top-left origin of canvas), stir, edge, drip, flow, lightX, lightY, stageY } */
     function render(s, dt) {
       if (lost) return;
-      // adaptive quality: if frames run long, shrink the pixel budget
+      // adaptive quality: if the GPU can't hold ~50fps, shrink the pixel budget
       if (dt) {
-        st.frames++;
-        if (dt > 26) st.slow++;
-        if (st.frames >= 45) {
-          if (st.slow > 22 && st.budget > 180000) { st.budget *= 0.72; resize(); }
-          st.frames = 0; st.slow = 0;
+        if (st.warm < 40) st.warm++;
+        else {
+          st.frames++;
+          if (dt > 21) st.slow++;
+          if (st.frames >= 50) {
+            if (st.slow > 20 && st.budget > st.floor) { st.budget = Math.max(st.floor, st.budget * 0.7); resize(); st.warm = 20; }
+            st.frames = 0; st.slow = 0;
+          }
         }
       }
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
@@ -234,7 +251,7 @@ void main(){
     }
 
     resize();
-    return { resize, render, get lost() { return lost; } };
+    return { resize, render, deriv, get lost() { return lost; } };
   }
 
   window.JoyLiquid = { create };

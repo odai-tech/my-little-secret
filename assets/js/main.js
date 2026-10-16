@@ -1,5 +1,5 @@
 /* Joy — orchestration: intro, i18n, scroll choreography, chameleon page colour,
-   the opening window, flavour spotlight, 3D table, delivery rules and the order box.
+   the dealt card deck, flavour spotlight, 3D table, delivery rules and the one-sheet checkout.
    Performance rules: read layout once (cached), write only transforms/opacity,
    skip any update whose input did not change, cap WebGL at ~60fps. */
 (function () {
@@ -36,6 +36,12 @@
   let lang = 'en';
   const t = k => (I18N[lang] && I18N[lang][k] != null) ? I18N[lang][k] : (I18N.en[k] != null ? I18N.en[k] : k);
   const listOf = k => t(k).split('·').map(s => s.trim()).filter(Boolean);
+  const plural = (base, n) => {
+    let cat = 'other';
+    try { cat = new Intl.PluralRules(lang).select(n); } catch (e) { /* old browser */ }
+    const d = I18N[lang] || I18N.en;
+    return String(d[`${base}.${cat}`] || d[`${base}.other`] || I18N.en[`${base}.other`]).replace('{n}', n);
+  };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /* wrap words for reveal animations, keeping <em> and <br>.
@@ -68,6 +74,7 @@
     html.dir = I18N[code].dir;
     $$('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
     $$('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label', t(el.dataset.i18nAria)));
+    $$('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
     $$('[data-notes]').forEach(ul => { ul.innerHTML = listOf(ul.dataset.notes).map(n => `<li>${esc(n)}</li>`).join(''); });
     $$('[data-split]').forEach(el => splitWords(el));
     splitManifesto();
@@ -77,6 +84,7 @@
     showFlavourText();
     renderCalendar();
     setDateLimits();
+    renderDays();
     table.front = -1;
     $('#langCurrent').textContent = code.toUpperCase();
     $$('.lang-menu button').forEach(b => b.setAttribute('aria-current', String(b.dataset.lang === code)));
@@ -102,7 +110,7 @@
   function setDateLimits() {
     const inp = $('#fDate'); if (!inp) return;
     inp.min = ymd(addDays(ORDER_DAYS));
-    $('#dateHint').textContent = t('box.earliest').replace('{date}', earliestLabel());
+    $('#dateHint').textContent = t('box.earliest').replace('{date}', fmt(addDays(ORDER_DAYS), { weekday: 'long', day: 'numeric', month: 'long' }));
   }
 
   /* ── layout cache (read once, animate from scrollY) ────────── */
@@ -117,7 +125,7 @@
   const parallax = $$('[data-parallax]').map(el => ({ el, f: parseFloat(el.dataset.parallax) || 0, m: null, v: NaN }));
   const ribbons = $$('.ribbon').map(el => ({ el, track: $('.ribbon-track', el), dir: parseFloat(el.dataset.speed) || 1, x: 0, unit: 0, m: null }));
   const manifesto = { el: $('#manifestoText'), words: [], on: -1, m: null };
-  const opening = { el: $('#collection'), head: $('#openingHead'), frame: $('#openingFrame'), cap: $('#openingCaption'), m: null, p: -1 };
+  const deck = { el: $('#collection'), list: $('#deckCards'), cards: $$('.dcard').map(el => ({ el, dx: 0, dy: 0, fr: 0, fy: 0 })), m: null, lm: null, p: -1, pinned: true };
   const glints = [
     { grad: $('#glintHero'), mark: $('.mark-hero'), m: null, x: 300, y: 160 },
     { grad: $('#glintFoot'), mark: $('.mark-foot'), m: null, x: 300, y: 160 },
@@ -132,7 +140,7 @@
     parallax.forEach(p => { p.m = box(p.el.parentElement); p.v = NaN; });
     ribbons.forEach(r => { r.m = box(r.el.parentElement); r.unit = r.track.scrollWidth / 8; });
     manifesto.m = box(manifesto.el);
-    opening.m = box(opening.el); opening.p = -1;
+    measureDeck();
     glints.forEach(g => { g.m = box(g.mark); });
     heroM = box(hero);
     flavour.m = box(flavour.section);
@@ -267,21 +275,41 @@
     }
   }
 
-  /* ── opening: the window opens onto the table as you scroll ─ */
-  function updateOpening(y) {
-    const m = opening.m; if (!m || reduce || !visible(m, y, 60)) return;
-    const p = clamp((y - m.top) / Math.max(1, m.h - L.vh), 0, 1);
-    if (Math.abs(p - opening.p) < .0004) return;
-    opening.p = p;
-    const e = easeInOut(clamp(p / .62, 0, 1));
-    const s0 = small() ? .64 : .5, ty0 = L.vh * (small() ? .17 : .15);
-    opening.frame.style.transform = `translate3d(0, ${(ty0 * (1 - e)).toFixed(1)}px, 0) scale(${(s0 + (1 - s0) * e).toFixed(4)})`;
-    const hp = clamp(p / .34, 0, 1);
-    opening.head.style.opacity = (1 - hp).toFixed(3);
-    opening.head.style.transform = `translate3d(0, ${(-hp * 70).toFixed(1)}px, 0) scale(${(1 - hp * .06).toFixed(4)})`;
-    const cp = clamp((p - .58) / .22, 0, 1);
-    opening.cap.style.opacity = cp.toFixed(3);
-    opening.cap.firstElementChild.style.transform = `translate3d(0, ${((1 - cp) * 40).toFixed(1)}px, 0)`;
+  /* ── collection: four Joy cards, stacked face-down like boxes on the
+     counter, deal themselves out and flip over as you scroll ───── */
+  const STACK = [[-5, -7, -6], [4, -3, 4], [-3, 3, -2], [5, 6, 5]];  // x, y, rotation of each card in the pile
+  function measureDeck() {
+    if (!deck.el) return;
+    deck.m = box(deck.el);
+    deck.lm = box(deck.list);
+    deck.pinned = !small();
+    const n = deck.cards.length, mid = (n - 1) / 2;
+    const pos = deck.cards.map(c => ({ x: c.el.offsetLeft + c.el.offsetWidth / 2, y: c.el.offsetTop + c.el.offsetHeight / 2 }));
+    const tx = deck.list.clientWidth / 2, ty = Math.min.apply(null, pos.map(q => q.y));
+    deck.cards.forEach((c, i) => {
+      c.dx = tx - pos[i].x; c.dy = ty - pos[i].y;
+      c.fr = (deck.pinned ? (i - mid) * 2.6 : (i % 2 ? 1.4 : -1.4)) * (html.dir === 'rtl' ? -1 : 1);   // the fan they land in
+      c.fy = deck.pinned ? Math.abs(i - mid) * 14 : 0;
+      c.el.style.setProperty('--r', `${c.fr}deg`);
+    });
+    deck.p = -1;
+  }
+  function updateDeck(y) {
+    const m = deck.m; if (!m || reduce || !visible(m, y, 200)) return;
+    const p = deck.pinned
+      ? clamp((y - m.top) / Math.max(1, m.h - L.vh), 0, 1)
+      : clamp((L.vh * .85 - (deck.lm.top - y)) / (L.vh * .7), 0, 1);
+    if (Math.abs(p - deck.p) < .0005) return;
+    deck.p = p;
+    deck.cards.forEach((c, i) => {
+      const k = clamp((p - .06 - i * .1) / .4, 0, 1);
+      const e = easeInOut(k), f = easeInOut(clamp((k - .08) / .7, 0, 1)), j = STACK[i % 4];
+      const x = (c.dx + j[0]) * (1 - e), yy = (c.dy + j[1]) * (1 - e) + c.fy * e - Math.sin(k * Math.PI) * 26;
+      const r = j[2] * (1 - e) + c.fr * e;
+      c.el.style.transform = `translate3d(${x.toFixed(1)}px, ${yy.toFixed(1)}px, 0) rotate(${r.toFixed(2)}deg) perspective(1300px) rotateY(${(180 * (1 - f)).toFixed(1)}deg)`;
+      c.el.classList.toggle('is-up', f > .5);
+    });
+    deck.el.classList.toggle('is-dealt', p > .78);
   }
 
   /* ── chapters + parallax ───────────────────────────────────── */
@@ -440,7 +468,7 @@
     st.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
       table.drag = true; table.moved = 0; table.lastX = e.clientX; table.lastT = performance.now();
-      table.down = e.target.closest('.ring-card'); table.target = null; table.vel = 0;
+      table.down = e.target.closest('.ring-card'); table.target = null; table.free = null; table.vel = 0;
       try { st.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       st.classList.add('is-drag');
     });
@@ -462,6 +490,29 @@
     };
     st.addEventListener('pointerup', end);
     st.addEventListener('pointercancel', end);
+
+    // a mouse turns the table just by gliding across it; a trackpad by swiping sideways
+    let hx = null, settle = 0;
+    const glide = deg => {
+      table.free = (table.free == null ? (table.target == null ? table.angle : table.target) : table.free) + deg;
+      table.target = table.free; table.idleAt = performance.now();
+      clearTimeout(settle);
+      settle = setTimeout(() => { if (table.free != null) table.target = nearestDetent(table.free); table.free = null; }, 260);
+    };
+    st.addEventListener('pointermove', e => {
+      if (e.pointerType !== 'mouse' || table.drag) return;
+      if (hx != null) { const dx = e.clientX - hx; if (dx) glide(dx * .15); }
+      hx = e.clientX;
+    });
+    st.addEventListener('pointerleave', () => {
+      hx = null; clearTimeout(settle);
+      if (!table.drag && table.free != null) { table.target = nearestDetent(table.free); table.free = null; }
+    });
+    st.addEventListener('wheel', e => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;  // vertical scrolling keeps scrolling the page
+      e.preventDefault();
+      glide(-e.deltaX * (e.deltaMode === 1 ? 6 : .22));
+    }, { passive: false });
   }
   function updateTable(y, now) {
     if (!visible(table.m, y, 120)) { table.seen = false; return; }
@@ -484,21 +535,26 @@
     updateRingCaption();
   }
 
-  /* ── lightbox ──────────────────────────────────────────────── */
+  /* ── lightbox: the full photo, with the dessert one tap from the box ── */
   const dlg = $('#lightbox'), dlgImg = $('#lightboxImg');
   function openLightbox(card) {
     if (!dlg || typeof dlg.showModal !== 'function') return;
     dlgImg.src = card.dataset.full;
     dlgImg.alt = ($('img', card) || {}).alt || '';
+    $('#lightboxName').textContent = card.dataset.name.split('|').map(t).join(' · ');
+    const item = card.dataset.item, add = $('#lightboxAdd');
+    add.hidden = !item; $('#lightboxPick').hidden = !!item;
+    if (item) { add.dataset.add = item; resetAdd(add); }
     dlg.showModal();
   }
   function bindLightbox() {
     if (!dlg) return;
     $('#lightboxClose').addEventListener('click', () => dlg.close());
+    $('#lightboxPick').addEventListener('click', () => dlg.close());
     dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
   }
 
-  /* ── the box (order) ───────────────────────────────────────── */
+  /* ── the box ───────────────────────────────────────────────── */
   const CATALOG = [
     { id: 'trilece', key: 'p.trilece', group: 'sig', img: 'assets/img/trilece-sm.webp' },
     { id: 'beirut', key: 'p.beirut', group: 'sig', img: 'assets/img/beirut-stack-sm.webp' },
@@ -511,11 +567,14 @@
     { id: 'dates', key: 'p.dates', group: 'more', mono: 'D' },
     { id: 'basbousa', key: 'p.basbousa', group: 'more', mono: 'B' },
   ];
+  const FAVOURITES = ['trilece', 'beirut', 'balls', 'cc-lotus'];
   const byId = id => CATALOG.find(i => i.id === id);
   const itemName = i => i.flavour ? `${t('p.cheese.name')} · ${t(`fl.${i.flavour}.name`)}` : t(`${i.key}.name`);
+  const itemNotes = i => i.flavour ? t(`fl.${i.flavour}.desc`) : listOf(`${i.key}.notes`).join(' · ');
   let bag = {};
   try { bag = JSON.parse(local.get('joy-box') || '{}') || {}; } catch (e) { bag = {}; }
   Object.keys(bag).forEach(k => { if (!byId(k) || !(bag[k] > 0)) delete bag[k]; });
+  const total = () => Object.values(bag).reduce((a, b) => a + b, 0);
 
   function cropStyle(c) {
     const k = 2.85, ar = 900 / 1206;
@@ -528,25 +587,29 @@
     if (i.crop) return `<span class="menu-thumb" style="${cropStyle(i.crop)}"></span>`;
     return `<span class="menu-thumb is-mono" aria-hidden="true">${i.mono}</span>`;
   }
+  function stepper(i) {
+    const q = bag[i.id] || 0, full = esc(itemName(i));
+    return `<div class="stepper"><button type="button" data-step="-1" aria-label="${esc(t('stepper.remove'))}: ${full}"${q ? '' : ' disabled'}><svg width="16" height="16" aria-hidden="true"><use href="#i-minus"/></svg></button>` +
+      `<output aria-live="polite">${q}</output>` +
+      `<button type="button" data-step="1" aria-label="${esc(t('stepper.add'))}: ${full}"><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button></div>`;
+  }
   function renderMenu() {
     const menu = $('#menu'); if (!menu) return;
     const groups = [['sig', 'or.g.sig'], ['cheese', 'or.g.cheese'], ['more', 'or.g.more']];
     menu.innerHTML = groups.map(([g, k]) => `<div class="menu-group"><h3>${esc(t(k))}</h3>` +
       CATALOG.filter(i => i.group === g).map(i => {
         const name = i.flavour ? t(`fl.${i.flavour}.name`) : t(`${i.key}.name`);
-        const notes = i.flavour ? t(`fl.${i.flavour}.desc`) : listOf(`${i.key}.notes`).join(' · ');
-        const q = bag[i.id] || 0, full = esc(itemName(i));
-        return `<div class="menu-row" data-id="${i.id}">${thumb(i)}<div><p class="menu-name">${esc(name)}</p><p class="menu-notes">${esc(notes)}</p></div>` +
-          `<div class="stepper"><button type="button" data-step="-1" aria-label="${esc(t('stepper.remove'))}: ${full}"${q ? '' : ' disabled'}><svg width="16" height="16" aria-hidden="true"><use href="#i-minus"/></svg></button>` +
-          `<output aria-live="polite">${q}</output>` +
-          `<button type="button" data-step="1" aria-label="${esc(t('stepper.add'))}: ${full}"><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>`;
+        return `<div class="menu-row" data-id="${i.id}">${thumb(i)}<div><p class="menu-name">${esc(name)}</p><p class="menu-notes">${esc(itemNotes(i))}</p></div>${stepper(i)}</div>`;
       }).join('') + '</div>').join('');
   }
   function renderSummary() {
-    const list = $('#summaryList'), ids = CATALOG.filter(i => bag[i.id]);
-    list.innerHTML = ids.map(i => `<li><span>${esc(itemName(i))}</span><b>× ${bag[i.id]}</b></li>`).join('');
+    const ids = CATALOG.filter(i => bag[i.id]), n = total();
+    $('#summaryList').innerHTML = ids.map(i => `<li><span>${esc(itemName(i))}</span><b>× ${bag[i.id]}</b></li>`).join('');
     $('#summaryEmpty').hidden = ids.length > 0;
-    $('#boxCount').textContent = Object.values(bag).reduce((a, b) => a + b, 0);
+    $('#boxCount').textContent = n;
+    $('#cartBarCount').textContent = n;
+    renderCart();
+    updateCartBar();
   }
   function setQty(id, q) {
     q = clamp(q | 0, 0, 99);
@@ -554,18 +617,19 @@
     local.set('joy-box', JSON.stringify(bag));
     const row = $(`.menu-row[data-id="${id}"]`);
     if (row) {
-      const out = $('output', row);
-      out.textContent = q; out.classList.remove('is-pop'); void out.offsetWidth; out.classList.add('is-pop');
+      $('output', row).textContent = q;
       $('[data-step="-1"]', row).disabled = !q;
     }
     renderSummary();
+    $$(`[data-id="${id}"] output`).forEach(out => { out.classList.remove('is-pop'); void out.offsetWidth; out.classList.add('is-pop'); });
   }
   const boxBtn = $('#boxBtn');
-  function bump() { boxBtn.classList.remove('is-bump'); void boxBtn.offsetWidth; boxBtn.classList.add('is-bump'); }
+  function bump() { [boxBtn, cartBar].forEach(b => { b.classList.remove('is-bump'); void b.offsetWidth; b.classList.add('is-bump'); }); }
   function fly(from, item) {
-    if (reduce || !from) { bump(); return; }
+    if (reduce || !from || (cart && cart.open) || (dlg && dlg.open)) { bump(); return; }
     nav.classList.remove('is-hidden');
-    const a = from.getBoundingClientRect(), b = boxBtn.getBoundingClientRect();
+    const target = cartBar.classList.contains('is-on') ? $('.cartbar-count') : boxBtn;
+    const a = from.getBoundingClientRect(), b = target.getBoundingClientRect();
     const el = document.createElement('span');
     el.className = 'flyer';
     if (item.img) el.style.background = `url(${item.img}) center/cover`;
@@ -589,6 +653,12 @@
     const el = $('#toast'); el.textContent = msg; el.classList.add('is-on');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('is-on'), 2800);
   }
+  function resetAdd(btn) {
+    clearTimeout(btn._t);
+    const label = $('[data-i18n="add"]', btn), icon = $('use', btn);
+    if (label) label.textContent = t('add');
+    if (icon) icon.setAttribute('href', '#i-plus');
+  }
   function addToBox(id, btn) {
     const item = byId(id); if (!item) return;
     setQty(id, (bag[id] || 0) + 1);
@@ -597,74 +667,186 @@
     fly(from, item);
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* not allowed */ } }
     toast(t('toast.added').replace('{name}', itemName(item)));
-    const label = $('span', btn), icon = $('use', btn);
+    const label = $('[data-i18n="add"]', btn), icon = $('use', btn);
+    if (!label) return;
     btn.classList.remove('is-added'); void btn.offsetWidth; btn.classList.add('is-added');
     if (icon) icon.setAttribute('href', '#i-check');
-    if (label) label.textContent = t('added');
+    label.textContent = t('added');
     clearTimeout(btn._t);
-    btn._t = setTimeout(() => { if (label) label.textContent = t('add'); if (icon) icon.setAttribute('href', '#i-plus'); }, 1700);
+    btn._t = setTimeout(() => resetAdd(btn), 1700);
   }
 
-  /* order form: delivery in the Haifa area, pickup elsewhere, 2 days' notice */
-  const form = $('#orderForm');
+  /* ── checkout: one sheet with the box, delivery or pickup, the day and who it's for ── */
+  const cart = $('#cart'), cartBar = $('#cartBar'), form = $('#orderForm');
   const method = () => (form.querySelector('input[name="method"]:checked') || {}).value || 'delivery';
+  let otherDay = false, summaryOnScreen = false, pastHero = false;
+
+  function renderCart() {
+    const list = $('#cartItems'); if (!list) return;
+    const ids = CATALOG.filter(i => bag[i.id]);
+    const f = document.activeElement && document.activeElement.closest ? document.activeElement.closest('#cartItems [data-step]') : null;
+    const keep = f ? [f.closest('[data-id]').dataset.id, f.dataset.step] : null;
+    list.innerHTML = ids.map(i => `<li class="cart-item" data-id="${i.id}">${thumb(i)}<div class="cart-item-t"><p class="cart-name">${esc(itemName(i))}</p><p class="cart-meta">${esc(itemNotes(i))}</p></div>${stepper(i)}</li>`).join('');
+    if (keep) {
+      const again = $(`#cartItems [data-id="${keep[0]}"] [data-step="${keep[1]}"]`);
+      (again && !again.disabled ? again : $('#cartItems [data-step="1"]') || $('#cartMore')).focus();
+    }
+    $('#cartEmpty').hidden = ids.length > 0;
+    $('#cartMore').hidden = !ids.length;
+    $('#cartCount').textContent = ids.length ? plural('box.n', total()) : '';
+    $('#cartQuick').innerHTML = FAVOURITES.map(id => {
+      const i = byId(id);
+      return `<button type="button" class="quick" data-add="${id}">${thumb(i)}<span>${esc(itemName(i))}</span><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button>`;
+    }).join('');
+    if (ids.length) setErr('errItems', '');
+  }
+  function renderDays() {
+    const wrap = $('#days'); if (!wrap) return;
+    const cur = $('#fDate').value;
+    let chips = '', hit = false;
+    for (let n = ORDER_DAYS; n < ORDER_DAYS + 7; n++) {
+      const d = addDays(n), v = ymd(d), on = !otherDay && v === cur;
+      if (on) hit = true;
+      chips += `<button type="button" class="day" data-day="${v}" aria-pressed="${on}"><small>${esc(fmt(d, { weekday: 'short' }))}</small><b>${esc(fmt(d, { day: 'numeric' }))}</b><em>${esc(n === ORDER_DAYS ? t('bn.days.first') : fmt(d, { month: 'short' }))}</em></button>`;
+    }
+    if (cur && !hit) otherDay = true;
+    chips += `<button type="button" class="day day-other" data-day="other" aria-pressed="${otherDay}"><svg width="18" height="18" aria-hidden="true"><use href="#i-plus"/></svg><b>${esc(t('box.other'))}</b></button>`;
+    wrap.innerHTML = chips;
+    $('#otherField').hidden = !otherDay;
+  }
+  function pickDay(v) {
+    const inp = $('#fDate');
+    if (v === 'other') {
+      if (!otherDay) inp.value = '';
+      otherDay = true; renderDays();
+      inp.focus();
+      if (typeof inp.showPicker === 'function') { try { inp.showPicker(); } catch (e) { /* needs a user gesture */ } }
+    } else {
+      otherDay = false; inp.value = v; renderDays();
+      const b = $(`#days [data-day="${v}"]`); if (b) b.focus();
+    }
+    setErr('errDate', '');
+  }
+  function setErr(id, msg) {
+    const e = $('#' + id); if (!e) return;
+    e.textContent = msg || '';
+    const f = e.closest('.field, .cart-step'); if (f) f.classList.toggle('is-bad', !!msg);
+  }
   function syncMethod() {
     const pickup = method() === 'pickup';
     $('#addressField').hidden = pickup;
     $('#pickupNote').hidden = !pickup;
+    if (pickup) setErr('errAddress', '');
   }
   function dateTooSoon(v) { return v && v < ymd(addDays(ORDER_DAYS)); }
   function compose() {
-    const items = CATALOG.filter(i => bag[i.id]);
-    const m = method();
+    const items = CATALOG.filter(i => bag[i.id]), m = method();
     const lines = [t('msg.hello'), ''].concat(items.map(i => `• ${bag[i.id]} × ${itemName(i)}`), ['']);
     lines.push(`${t('msg.method')}: ${t(m === 'pickup' ? 'msg.pickup' : 'msg.delivery')}`);
-    const addr = $('#fAddress').value.trim(), name = $('#fName').value.trim(), date = $('#fDate').value, notes = $('#fNotes').value.trim();
-    if (m === 'delivery' && addr) lines.push(`${t('msg.address')}: ${addr}`);
-    if (name) lines.push(`${t('msg.name')}: ${name}`);
+    const v = id => $(id).value.trim();
+    const date = $('#fDate').value;
+    if (m === 'delivery' && v('#fAddress')) lines.push(`${t('msg.address')}: ${v('#fAddress')}`);
     if (date) lines.push(`${t('msg.date')}: ${fmt(new Date(date + 'T12:00:00'), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`);
-    if (notes) lines.push(`${t('msg.notes')}: ${notes}`);
+    if (v('#fName')) lines.push(`${t('msg.name')}: ${v('#fName')}`);
+    if (v('#fPhone')) lines.push(`${t('msg.phone')}: ${v('#fPhone')}`);
+    if (v('#fNotes')) lines.push(`${t('msg.notes')}: ${v('#fNotes')}`);
     return lines.join('\n').trim();
   }
   function validate() {
-    if (!CATALOG.some(i => bag[i.id])) {
-      toast(t('box.needItems'));
-      const m = $('#menu'); if (m) m.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-      return false;
-    }
-    if (method() === 'delivery' && !$('#fAddress').value.trim()) { toast(t('box.needAddress')); $('#fAddress').focus(); return false; }
-    if (dateTooSoon($('#fDate').value)) { toast(t('box.tooSoon')); $('#fDate').focus(); return false; }
-    return true;
+    let first = null;
+    const check = (id, msg, el) => { setErr(id, msg); if (msg && !first) first = el; };
+    check('errItems', CATALOG.some(i => bag[i.id]) ? '' : t('box.needItems'), $('#cartQuick .quick'));
+    check('errAddress', method() === 'delivery' && !$('#fAddress').value.trim() ? t('box.needAddress') : '', $('#fAddress'));
+    const dv = $('#fDate').value;
+    check('errDate', !dv ? t('box.needDate') : (dateTooSoon(dv) ? t('box.tooSoon') : ''), otherDay ? $('#fDate') : $('#days .day'));
+    check('errName', $('#fName').value.trim() ? '' : t('box.needName'), $('#fName'));
+    if (!first) return true;
+    first.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    first.focus({ preventScroll: true });
+    return false;
+  }
+  function sent(kind) {
+    $('#cartSentT').textContent = t(kind === 'wa' ? 'box.sent.wa' : 'box.sent.mail');
+    $('.cart-sent-d').hidden = kind === 'wa';
+    $('#cartSent').hidden = false;
+  }
+  function openCart() {
+    if (!cart || typeof cart.showModal !== 'function') { location.hash = '#order'; return; }
+    if (cart.open) return;
+    renderCart(); renderDays();
+    $('#cartSent').hidden = true;
+    cart.showModal();
+    html.classList.add('cart-open');
+    requestAnimationFrame(() => requestAnimationFrame(() => cart.classList.add('is-open')));
+    updateCartBar();
+  }
+  function closeCart() {
+    if (!cart || !cart.open) return;
+    cart.classList.remove('is-open');
+    html.classList.remove('cart-open');
+    setTimeout(() => { if (!cart.classList.contains('is-open') && cart.open) { cart.close(); updateCartBar(); } }, reduce ? 0 : 460);
+  }
+  function updateCartBar() {
+    if (!cartBar) return;
+    const on = total() > 0 && pastHero && !summaryOnScreen && !(cart && cart.open);
+    if (on === cartBar._on) return;
+    cartBar._on = on;
+    cartBar.classList.toggle('is-on', on);
+    if (on) cartBar.removeAttribute('inert'); else cartBar.setAttribute('inert', '');
+    html.classList.toggle('has-cartbar', on);
   }
   function bindBox() {
     document.addEventListener('click', e => {
       const add = e.target.closest('[data-add]');
-      if (add) { addToBox(add.dataset.add, add); return; }
+      if (add) { if (add.dataset.add) addToBox(add.dataset.add, add); return; }
       const step = e.target.closest('[data-step]');
       if (step) {
-        const id = step.closest('.menu-row').dataset.id, d = +step.dataset.step;
+        const id = step.closest('[data-id]').dataset.id, d = +step.dataset.step;
         setQty(id, (bag[id] || 0) + d);
         if (d > 0) bump();
+        return;
       }
+      const open = e.target.closest('[data-open-cart]');
+      if (open) { e.preventDefault(); openCart(); }
     });
+    $('#cartClose').addEventListener('click', closeCart);
+    cart.addEventListener('cancel', e => { e.preventDefault(); closeCart(); });
+    cart.addEventListener('click', e => { if (e.target === cart) closeCart(); });
+    cart.addEventListener('close', () => { cart.classList.remove('is-open'); html.classList.remove('cart-open'); updateCartBar(); });
+    $('#cartMore').addEventListener('click', () => {
+      closeCart();
+      setTimeout(() => { const m = $('#menu'); if (m) m.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); }, reduce ? 0 : 300);
+    });
+    $('#days').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b) pickDay(b.dataset.day); });
+
     // remember the customer's details on this device
     let saved = {};
     try { saved = JSON.parse(local.get('joy-form') || '{}') || {}; } catch (e) { saved = {}; }
     if (saved.method === 'pickup') $('#mPickup').checked = true;
-    if (saved.address) $('#fAddress').value = saved.address;
-    if (saved.name) $('#fName').value = saved.name;
+    ['address', 'name', 'phone'].forEach(k => { const el = $('#f' + k[0].toUpperCase() + k.slice(1)); if (saved[k] && el) el.value = saved[k]; });
     syncMethod();
-    form.addEventListener('input', () => {
-      local.set('joy-form', JSON.stringify({ method: method(), address: $('#fAddress').value, name: $('#fName').value }));
+    form.addEventListener('input', e => {
+      local.set('joy-form', JSON.stringify({ method: method(), address: $('#fAddress').value, name: $('#fName').value, phone: $('#fPhone').value }));
+      const err = { fAddress: 'errAddress', fName: 'errName', fDate: 'errDate' }[e.target.id];
+      if (err && e.target.value.trim()) setErr(err, '');
     });
     form.addEventListener('change', e => {
       if (e.target.name === 'method') syncMethod();
-      if (e.target.id === 'fDate' && dateTooSoon(e.target.value)) { toast(t('box.tooSoon')); e.target.value = ''; }
+      if (e.target.id === 'fDate') {
+        if (dateTooSoon(e.target.value)) { setErr('errDate', t('box.tooSoon')); e.target.value = ''; }
+        else if (e.target.value) setErr('errDate', '');
+        renderDays();
+      }
     });
     form.addEventListener('submit', e => e.preventDefault());
     $('#sendMail').addEventListener('click', () => {
       if (!validate()) return;
       location.href = `mailto:${CONTACT.email}?subject=${encodeURIComponent(t('msg.subject'))}&body=${encodeURIComponent(compose().replace(/\n/g, '\r\n'))}`;
+      sent('mail');
+    });
+    $('#cartCopy').addEventListener('click', () => {
+      const btn = $('#cartCopy'), done = () => { btn.textContent = t('box.copied'); setTimeout(() => { btn.textContent = t('box.copy'); }, 2000); };
+      try { navigator.clipboard.writeText(compose()).then(done, () => {}); } catch (e) { /* no clipboard */ }
     });
     if (CONTACT.whatsapp) {
       const wa = $('#sendWa'), fw = $('#footerWa');
@@ -672,6 +854,7 @@
       wa.addEventListener('click', () => {
         if (!validate()) return;
         window.open(`https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent(compose())}`, '_blank', 'noopener');
+        sent('wa');
       });
       if (fw) { fw.hidden = false; fw.href = `https://wa.me/${CONTACT.whatsapp}`; fw.target = '_blank'; fw.rel = 'noopener'; }
     }
@@ -680,6 +863,10 @@
       local.set('joy-box', '{}');
       renderMenu(); renderSummary();
     });
+    // the floating box steps aside while the summary card is on screen
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(es => { summaryOnScreen = es[0].isIntersecting; updateCartBar(); }, { threshold: .25 }).observe($('#summary'));
+    }
   }
 
   /* ── nav: language, mobile sheet ───────────────────────────── */
@@ -759,7 +946,9 @@
       bar.style.transform = `scaleX(${clamp(y / Math.max(1, L.docH - L.vh), 0, 1).toFixed(4)})`;
       updateChameleon(y);
       updateManifesto(y);
-      updateOpening(y);
+      updateDeck(y);
+      const ph = heroM && y > heroM.h * .55;
+      if (ph !== pastHero) { pastHero = ph; updateCartBar(); }
       updateChapters(y);
       L.dirty = false;
     }
@@ -779,11 +968,12 @@
 
   /* ── boot ──────────────────────────────────────────────────── */
   function boot() {
+    const hint = $('#tableHint'); if (hint && fine) hint.dataset.i18n = 'tb.hint.mouse';
     const saved = local.get('joy-lang');
     const nav2 = (navigator.language || 'en').slice(0, 2).toLowerCase();
     applyLang(saved || (I18N[nav2] ? nav2 : 'en'));
 
-    if (reduce) opening.el.classList.add('is-static');
+    if (reduce) deck.el.classList.add('is-static');
     initLiquid();
     if (window.JoyFX && !reduce) JoyFX.init($('#fx'));
     bindNav(); bindPointerFx(); bindFlavours(); bindTable(); bindLightbox(); bindBox(); bindReveals();
@@ -815,7 +1005,7 @@
     addEventListener('load', measureAll);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureAll);
     // a new day moves the earliest delivery date
-    setInterval(() => { renderCalendar(); setDateLimits(); }, 60 * 60 * 1000);
+    setInterval(() => { renderCalendar(); setDateLimits(); renderDays(); }, 60 * 60 * 1000);
 
     measureAll();
     intro();

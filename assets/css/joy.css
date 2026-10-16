@@ -202,7 +202,7 @@ html:not(.js) .preloader { display: none; }
 
 /* ─────────────────────────── nav ─────────────────────────── */
 .nav {
-  position: fixed; z-index: 400; top: 14px; left: 50%;
+  position: fixed; z-index: 400; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%;
   width: min(1200px, calc(100% - 24px));
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 8px 8px 8px 24px; border-radius: 999px;
@@ -269,7 +269,8 @@ html:not(.js) .preloader { display: none; }
 
 .sheet {
   position: fixed; inset: 0; z-index: 390;
-  display: flex; flex-direction: column; justify-content: center; padding: 100px 28px 40px;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: calc(100px + env(safe-area-inset-top, 0px)) 28px calc(40px + env(safe-area-inset-bottom, 0px));
   background: radial-gradient(ellipse at 50% 0%, #3A1D0E, #120A07 70%);
   color: var(--cream);
   clip-path: circle(0 at calc(100% - 46px) 36px);
@@ -763,7 +764,7 @@ html:not(.js) .pillar-icon, .pillar.is-in .pillar-icon { stroke-dashoffset: 0; }
 
 /* ─────────────────────────── toast + lightbox ─────────────────────────── */
 .toast {
-  position: fixed; z-index: 4500; left: 50%; bottom: 26px;
+  position: fixed; z-index: 4500; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px));
   padding: 14px 22px; border-radius: 999px; max-width: calc(100% - 32px);
   background: rgba(24,12,7,.92); color: var(--cream);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);

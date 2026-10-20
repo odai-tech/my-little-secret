@@ -1,6 +1,6 @@
-/* Joy — milk, honey & pistachio hero.
+/* Joy — milk, sky-blue & pistachio hero.
    One full-screen fragment shader: a slow, silky milk surface (iterated sine
-   warping) marbled with thin ribbons of honey and pistachio, lit by bright
+   warping) marbled with thin ribbons of sky blue and pistachio, lit by bright
    Mediterranean daylight (soft diffuse + satin sheen + sky reflections in the
    folds), with real drips of milk hanging off the bottom edge (signed-distance
    round cones, smooth-unioned into the pour) that cast a soft sea-blue shadow
@@ -129,16 +129,16 @@ void main(){
 
   vec3 milkLo  = vec3(0.865, 0.872, 0.860);   // shaded milk picks up a little sea-blue sky
   vec3 milkHi  = vec3(0.995, 0.975, 0.940);
-  vec3 honeyLo = vec3(0.800, 0.560, 0.220);
-  vec3 honeyHi = vec3(0.975, 0.800, 0.470);
+  vec3 blueLo  = vec3(0.360, 0.660, 0.880);   // sky-blue ribbon
+  vec3 blueHi  = vec3(0.720, 0.890, 0.980);
   vec3 pistLo  = vec3(0.600, 0.690, 0.450);
   vec3 pistHi  = vec3(0.800, 0.860, 0.620);
   float sh = smoothstep(0.0, 0.85, f0.x);
   float bw = 0.035 + 0.05 * f0.x;   // ribbons thicken where the surface swells
-  float honey = smoothstep(bw, bw * 0.2, abs(f0.y - 0.80));
+  float blue  = smoothstep(bw, bw * 0.2, abs(f0.y - 0.80));
   float pist  = smoothstep(bw * 0.7, bw * 0.15, abs(f0.y - 0.24));
   vec3 base = mix(milkLo, milkHi, sh);
-  base = mix(base, mix(honeyLo, honeyHi, sh), honey * 0.82);
+  base = mix(base, mix(blueLo, blueHi, sh), blue * 0.78);
   base = mix(base, mix(pistLo, pistHi, sh), pist * 0.6);
 
   vec3 col = base * (0.66 + 0.40 * ndl);            // light scatters inside milk: high ambient
@@ -148,7 +148,7 @@ void main(){
   col += box * 0.10 * vec3(1.0, 0.97, 0.9);
   col = mix(col, vec3(0.975, 0.958, 0.93), rim * 0.32);   // drips stay creamy white, never metallic
 
-  // a whisper of shade behind the wordmark so the gold reads on white
+  // a whisper of shade behind the wordmark so the wordmark reads on white
   vec2 c = (px - uStage) / vec2(W * 0.40, H * 0.26);
   col *= 1.0 - 0.08 * exp(-dot(c, c));
   col *= mix(0.93, 1.0, smoothstep(H, H * 0.55, px.y));

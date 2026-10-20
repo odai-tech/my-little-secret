@@ -38,12 +38,12 @@
       <stop offset=".45" stop-color="#55BCC1"/>
       <stop offset="1"   stop-color="#3EA2A8"/>
     </linearGradient>
-    <linearGradient id="g-gold-deep" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0"   stop-color="#EBCB83"/>
-      <stop offset=".3"  stop-color="#C39239"/>
-      <stop offset=".52" stop-color="#8E6420"/>
-      <stop offset=".74" stop-color="#D9B15F"/>
-      <stop offset="1"   stop-color="#9A6E28"/>
+    <linearGradient id="g-sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#BFE7FC"/>
+      <stop offset=".3"  stop-color="#5DB4E6"/>
+      <stop offset=".52" stop-color="#2479B3"/>
+      <stop offset=".74" stop-color="#7CC8F0"/>
+      <stop offset="1"   stop-color="#2C86C2"/>
     </linearGradient>
     <symbol id="seal" viewBox="0 0 240 160">
       <ellipse cx="120" cy="80" rx="117" ry="77" fill="url(#g-band)"/>
@@ -86,16 +86,16 @@
       <feComposite in2="so" operator="in" result="sh"/>
       <feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge>
     </filter>
-    <filter id="f-emboss-light" x="-12%" y="-25%" width="124%" height="150%" color-interpolation-filters="sRGB">
+    <filter id="f-emboss-sky" x="-12%" y="-25%" width="124%" height="150%" color-interpolation-filters="sRGB">
       <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
-      <feSpecularLighting in="b" surfaceScale="6" specularConstant="1.1" specularExponent="24" lighting-color="#FFF8E4" result="s">
+      <feSpecularLighting in="b" surfaceScale="6" specularConstant="1.1" specularExponent="24" lighting-color="#F4FBFF" result="s">
         <fePointLight x="300" y="-80" z="420"/>
       </feSpecularLighting>
       <feComposite in="s" in2="SourceAlpha" operator="in" result="si"/>
       <feComposite in="SourceGraphic" in2="si" operator="arithmetic" k1="0" k2="1" k3=".75" k4="0" result="lit"/>
       <feGaussianBlur in="SourceAlpha" stdDeviation="9" result="sb"/>
       <feOffset in="sb" dy="12" result="so"/>
-      <feFlood flood-color="#6B4A16" flood-opacity=".3"/>
+      <feFlood flood-color="#174E73" flood-opacity=".3"/>
       <feComposite in2="so" operator="in" result="sh"/>
       <feMerge><feMergeNode in="sh"/><feMergeNode in="lit"/></feMerge>
     </filter>
@@ -173,13 +173,13 @@
     <h1 class="hero-title">
       <span class="sr-only" data-i18n="hero.h1">Joy — handmade desserts</span>
       <span class="mark mark-hero" aria-hidden="true">
-        <svg class="mark-base" viewBox="0 0 1000 560"><text x="520" y="350" text-anchor="middle" fill="url(#g-gold-deep)" filter="url(#f-emboss-light)">Joy</text></svg>
+        <svg class="mark-base" viewBox="0 0 1000 560"><text x="520" y="350" text-anchor="middle" fill="url(#g-sky)" filter="url(#f-emboss-sky)">Joy</text></svg>
         <svg class="mark-fx" viewBox="0 0 1000 560">
           <defs>
             <radialGradient id="glintHero" gradientUnits="userSpaceOnUse" cx="300" cy="160" r="280">
-              <stop offset="0" stop-color="#FFFBEF" stop-opacity=".85"/>
-              <stop offset=".32" stop-color="#FFF2CF" stop-opacity=".3"/>
-              <stop offset="1" stop-color="#FFF2CF" stop-opacity="0"/>
+              <stop offset="0" stop-color="#FFFFFF" stop-opacity=".85"/>
+              <stop offset=".32" stop-color="#E6F6FF" stop-opacity=".32"/>
+              <stop offset="1" stop-color="#E6F6FF" stop-opacity="0"/>
             </radialGradient>
           </defs>
           <text class="mark-stroke" x="520" y="350" text-anchor="middle">Joy</text>
@@ -189,7 +189,7 @@
     </h1>
     <p class="hero-line" data-i18n="hero.line" data-split>Pure <em>joy</em> in every spoonful.</p>
     <div class="hero-ctas">
-      <a class="btn btn-gold" href="#collection" data-magnetic><span data-i18n="hero.cta1">Find your Joy</span><svg width="18" height="18"><use href="#i-arrow"/></svg></a>
+      <a class="btn btn-sky" href="#collection" data-magnetic><span data-i18n="hero.cta1">Find your Joy</span><svg width="18" height="18"><use href="#i-arrow"/></svg></a>
       <a class="btn btn-glass" href="#order" data-magnetic><svg width="18" height="18"><use href="#i-box"/></svg><span data-i18n="hero.cta2">Fill my Joy box</span></a>
     </div>
     <a class="hero-info" href="#good-to-know"><svg width="16" height="16" aria-hidden="true"><use href="#i-pin"/></svg><span data-i18n="hero.info">Fresh delivery across Haifa · Order 2 days ahead</span></a>

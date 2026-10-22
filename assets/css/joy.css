@@ -231,7 +231,7 @@ html:not(.js) .preloader { display: none; }
   box-shadow: 0 14px 40px -22px rgba(30,55,58,.35), inset 0 0 0 1px rgba(46,138,198,.22);
 }
 .nav.is-hidden { transform: translate3d(-50%, calc(-140% - env(safe-area-inset-top, 0px)), 0); }
-.nav-logo { display: block; width: 66px; aspect-ratio: 240 / 160; transition: transform .6s var(--ease-back); filter: drop-shadow(0 4px 10px rgba(30,80,85,.25)); }
+.nav-logo { display: block; width: 68px; aspect-ratio: 170 / 138; transition: transform .6s var(--ease-back); filter: drop-shadow(0 3px 6px rgba(30,95,140,.22)); }
 .nav-logo svg { width: 100%; height: 100%; display: block; }
 .nav-logo:hover { transform: rotate(-6deg) scale(1.06); }
 .nav-links { display: flex; gap: clamp(1rem, 2.2vw, 2.2rem); }
@@ -327,6 +327,20 @@ html.is-ready .mark-hero .mark-glint { animation: fillIn 1s 2s var(--ease-out) f
 @keyframes fadeStroke { to { opacity: 0; } }
 @keyframes fillIn { from { opacity: 0; } to { opacity: 1; } }
 .mark-foot { width: min(88vw, 760px, 90vh); margin: -2% auto -4%; }
+/* the cherry on the J: drops in after the wordmark is drawn, bounces, settles */
+.mark-cherry { filter: drop-shadow(0 9px 7px rgba(90,10,25,.3)); }
+.cherry-drop { transform-box: fill-box; transform-origin: 50% 100%; }
+html.js .mark-hero .cherry-drop { opacity: 0; }
+html.is-ready .mark-hero .cherry-drop { animation: cherryDrop 1.15s cubic-bezier(.33,0,.4,1) 2.2s both; }
+@keyframes cherryDrop {
+  0%   { opacity: 0; transform: translateY(-480px); }
+  10%  { opacity: 1; }
+  52%  { transform: translateY(0) scale(1.14, .84); }
+  68%  { transform: translateY(-38px) scale(.95, 1.06); }
+  83%  { transform: translateY(0) scale(1.05, .95); }
+  92%  { transform: translateY(-7px); }
+  100% { opacity: 1; transform: none; }
+}
 
 /* ─────────────────────────── hero ─────────────────────────── */
 .hero { position: relative; z-index: 5; height: 100vh; height: 100svh; min-height: 600px; color: #1E3638; }
@@ -339,8 +353,35 @@ html.is-ready .mark-hero .mark-glint { animation: fillIn 1s 2s var(--ease-out) f
     linear-gradient(170deg, #FFFDF8, #F4F1EA 60%, #EAF2EF);
 }
 html.has-liquid .hero-fallback { opacity: 0; transition: opacity 1s; }
+/* desserts on porcelain plates around the wordmark */
+.plates { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.plate { position: absolute; width: var(--s); aspect-ratio: 1; will-change: translate; }
+.plate-in {
+  position: relative; display: block; width: 100%; height: 100%; padding: 5.5%; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #FFFFFF 0%, #F6F8F7 45%, #E2E8E7 78%, #D0D9D8 100%);
+  box-shadow: 0 36px 46px -26px rgba(24,58,66,.55), 0 10px 18px -10px rgba(24,58,66,.32), inset 0 -3px 6px rgba(120,140,140,.25), inset 0 2px 3px #fff;
+  transform: rotate(var(--r, 0deg));
+  animation: plateFloat var(--t, 8s) ease-in-out infinite alternate;
+}
+.plate-in img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.plate-in::after {
+  content: ''; position: absolute; inset: 5.5%; border-radius: 50%; pointer-events: none;
+  box-shadow: inset 0 7px 14px rgba(0,0,0,.24), inset 0 0 0 1px rgba(0,0,0,.06);
+  background: linear-gradient(140deg, rgba(255,255,255,.22), transparent 38%);
+}
+@keyframes plateFloat {
+  from { transform: translate3d(0, -7px, 0) rotate(calc(var(--r, 0deg) - 2.5deg)); }
+  to   { transform: translate3d(0, 8px, 0) rotate(calc(var(--r, 0deg) + 2.5deg)); }
+}
+html.js .plate { opacity: 0; scale: .62; transition: opacity 1s var(--ease-out) var(--in, 1.5s), scale 1.3s var(--ease-back) var(--in, 1.5s); }
+html.js.is-ready .plate { opacity: 1; scale: 1; }
+.pl-1 { --s: clamp(150px, 17vw, 270px);  --r: -8deg; --t: 9s;   left: 5%;   top: 17%; }
+.pl-2 { --s: clamp(120px, 13.5vw, 215px); --r: 10deg; --t: 7.4s; left: 12%;  top: 61%; }
+.pl-3 { --s: clamp(150px, 16.5vw, 262px); --r: 7deg;  --t: 8.6s; right: 5%;  top: 15%; }
+.pl-4 { --s: clamp(120px, 14vw, 222px);  --r: -12deg; --t: 7.9s; right: 12%; top: 59%; }
+.pl-5 { --s: clamp(80px, 7.5vw, 122px);  --r: 0deg;  --t: 6.8s; left: 24%;  top: 10%; }
 .hero-inner {
-  position: relative; z-index: 2; height: 100%;
+  position: relative; z-index: 3; height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: calc(84px + env(safe-area-inset-top, 0px)) 16px 76px;
   will-change: transform, opacity;
@@ -350,6 +391,7 @@ html.has-liquid .hero-fallback { opacity: 0; transition: opacity 1s; }
   color: rgba(30,54,56,.78); text-shadow: 0 1px 14px rgba(255,255,255,.9);
 }
 .hero-title { width: 100%; display: flex; justify-content: center; }
+.mark-hero { width: min(90vw, 820px, 90vh); margin-top: calc(min(90vw, 820px, 90vh) * .055); }  /* room for the cherry's stem */
 .hero-line {
   font: 400 clamp(1.55rem, 3.6vw, 3.1rem)/1.15 var(--f-display);
   font-variation-settings: "SOFT" 100, "opsz" 72;
@@ -985,7 +1027,7 @@ html.has-cartbar .toast { bottom: calc(94px + env(safe-area-inset-bottom, 0px));
 @media (max-width: 860px) {
   .lang-btn span { display: none; }
   .nav { padding-inline-start: 12px; }
-  .nav-logo { width: 58px; }
+  .nav-logo { width: 60px; }
   .chapter { grid-template-columns: minmax(0, 1fr); min-height: 0; gap: 40px; padding: 90px 20px 100px; }
   .chapter-flip .chapter-media { order: 0; }
   .chapter-media { width: min(100%, 520px); margin: 0 auto; }
@@ -999,6 +1041,11 @@ html.has-cartbar .toast { bottom: calc(94px + env(safe-area-inset-bottom, 0px));
   .summary { position: relative; top: 0; margin-top: 70px; }
   .ring-stage { --cw: clamp(180px, 54vw, 270px); height: clamp(420px, 122vw, 580px); }
   .footer-cols { gap: 40px; }
+  .pl-5 { display: none; }
+  .pl-1 { left: -3%; top: 12%; }
+  .pl-3 { right: -3%; top: 14%; }
+  .pl-2 { left: 2%; top: auto; bottom: 7%; }
+  .pl-4 { right: 2%; top: auto; bottom: 9%; }
   .deck { height: auto; }
   .deck-sticky { position: relative; height: auto; overflow: visible; padding: 96px 16px 96px; }
   .deck-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
@@ -1026,6 +1073,9 @@ html.has-cartbar .toast { bottom: calc(94px + env(safe-area-inset-bottom, 0px));
   .summary { padding: 26px 18px 22px; }
   .footer-base { justify-content: center; text-align: center; }
   .hero-ctas .btn { width: min(100%, 300px); }
+  .pl-1, .pl-3 { display: none; }
+  .pl-2 { --s: 29vw; left: -12vw; bottom: -8vw; }
+  .pl-4 { --s: 31vw; right: -13vw; bottom: -6vw; }
   .hero-eyebrow { font-size: .6rem; letter-spacing: .2em; }
   .hero-info { font-size: .7rem; }
   .btn { height: 54px; padding: 0 24px; }
@@ -1049,6 +1099,11 @@ html.has-cartbar .toast { bottom: calc(94px + env(safe-area-inset-bottom, 0px));
   .lightbox-name { font-size: 1.1rem; }
 }
 
+@media (max-width: 560px) and (min-height: 760px) {
+  .pl-1 { display: block; --s: 30vw; left: -9vw; top: 10.5%; }
+  .pl-3 { display: block; --s: 27vw; right: -8vw; top: 13%; }
+}
+
 /* ─────────────────────────── reduced motion ─────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
@@ -1057,4 +1112,6 @@ html.has-cartbar .toast { bottom: calc(94px + env(safe-area-inset-bottom, 0px));
   html.js .chapter .lid { opacity: 1; translate: 0 0; scale: 1; }
   .map-pin i { display: none; }
   .cart-panel, .cartbar { transition: none; }
+  html.js .plate, html.js .mark-hero .cherry-drop { opacity: 1; scale: 1; animation: none; }
+  .plate-in { animation: none; }
 }

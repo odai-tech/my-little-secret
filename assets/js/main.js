@@ -247,6 +247,15 @@
     heroInner.style.transform = `translate3d(0, ${(v * .38).toFixed(1)}px, 0) scale(${(1 - clamp(v / H, 0, 1) * .06).toFixed(4)})`;
     heroInner.style.opacity = Math.max(0, 1 - (v / H) * 1.9).toFixed(3);
   }
+  /* the dessert plates drift with the cursor and lift away as you scroll, nearer plates more */
+  const plates = $$('.plate').map(el => ({ el, d: parseFloat(el.dataset.depth) || .5, v: '' }));
+  function updatePlates(y) {
+    const nx = liq.mx / L.vw - .5, ny = (liq.my - y) / L.vh - .5;
+    for (const p of plates) {
+      const v = `${(-nx * 36 * p.d).toFixed(1)}px ${(-ny * 28 * p.d - y * (.18 + .5 * p.d)).toFixed(1)}px`;
+      if (v !== p.v) { p.v = v; p.el.style.translate = v; }
+    }
+  }
   function revealHero() {
     const line = $('.hero-line');
     if (line) { line.style.setProperty('--d', '1.05s'); line.classList.add('is-in'); }
@@ -955,7 +964,7 @@
     const inHero = heroM && y < heroM.h + DRIP_ZONE + 40;
     if (inHero) {
       updateHero(y);
-      if (!reduce) renderLiquid(now, y, dy);
+      if (!reduce) { renderLiquid(now, y, dy); updatePlates(y); }
     }
     updateRibbons(y, dt);
     updateFlavour(y);

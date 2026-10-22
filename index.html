@@ -11,7 +11,7 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/img/og.jpg">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23F6E3B0'/%3E%3Cstop offset='.55' stop-color='%23B88A3C'/%3E%3Cstop offset='1' stop-color='%23E9CF8E'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='31' fill='%2350B7BC'/%3E%3Ccircle cx='32' cy='32' r='27' fill='none' stroke='url(%23g)' stroke-width='1.5'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-style='italic' font-size='34' fill='url(%23g)' text-anchor='middle'%3EJ%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='34' r='28' fill='%23F4FAFE' stroke='%235DB4E6' stroke-width='2.5'/%3E%3Ctext x='28' y='51' font-family='Georgia,serif' font-style='italic' font-size='38' fill='%232479B3' text-anchor='middle'%3EJ%3C/text%3E%3Cpath d='M41 12c1-4 4-7 9-9' fill='none' stroke='%2356702A' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='40' cy='17' r='7.5' fill='%23D9203A'/%3E%3Cellipse cx='37.4' cy='14.6' rx='2.4' ry='1.5' fill='%23fff' opacity='.85'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..800,0..100;1,9..144,300..800,0..100&family=Great+Vibes&family=Manrope:wght@300..700&family=Frank+Ruhl+Libre:wght@400;500;700&family=Assistant:wght@300..700&family=Amiri:ital,wght@0,400;0,700;1,400&family=Tajawal:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,500..800;1,500..800&display=swap">
@@ -45,6 +45,31 @@
       <stop offset=".74" stop-color="#7CC8F0"/>
       <stop offset="1"   stop-color="#2C86C2"/>
     </linearGradient>
+    <radialGradient id="g-cherry" cx=".36" cy=".3" r=".78">
+      <stop offset="0"   stop-color="#FF8D99"/>
+      <stop offset=".28" stop-color="#E8283F"/>
+      <stop offset=".7"  stop-color="#B00F27"/>
+      <stop offset="1"   stop-color="#6E0514"/>
+    </radialGradient>
+    <linearGradient id="g-leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B9D36E"/>
+      <stop offset="1" stop-color="#5C7E2C"/>
+    </linearGradient>
+    <!-- the cherry on top: centred on the fruit, radius 24 -->
+    <g id="cherry">
+      <path d="M1 -20C3 -33 9 -44 22 -53" fill="none" stroke="#56702A" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M1.6 -21C3.4 -32 9 -42 20 -50" fill="none" stroke="#A3BC60" stroke-width="1.1" stroke-linecap="round" opacity=".8"/>
+      <path d="M21 -52C27 -63 41 -66 50 -58C43 -49 30 -45 21 -52Z" fill="url(#g-leaf)"/>
+      <path d="M22 -52.5C30 -56 39 -58 48 -58" fill="none" stroke="#E6F2BC" stroke-width=".9" opacity=".7"/>
+      <path d="M0 -18C-7 -25 -24 -23 -24 -3C-24 14 -11 24 0 24C11 24 24 14 24 -3C24 -23 7 -25 0 -18Z" fill="url(#g-cherry)"/>
+      <ellipse cx="-9" cy="-7" rx="6.5" ry="3.8" transform="rotate(-38 -9 -7)" fill="#fff" opacity=".85"/>
+      <ellipse cx="11" cy="11" rx="3.4" ry="1.8" transform="rotate(-30 11 11)" fill="#fff" opacity=".3"/>
+    </g>
+    <!-- the site logo: the Joy script with a cherry on the J -->
+    <symbol id="logo" viewBox="0 -14 170 138">
+      <text x="80" y="90" text-anchor="middle" font-family="Great Vibes, cursive" font-size="84" fill="url(#g-sky)" stroke="url(#g-sky)" stroke-width="1.4" stroke-linejoin="round">Joy</text>
+      <use href="#cherry" transform="translate(114 13.5) scale(.43)"/>
+    </symbol>
     <symbol id="seal" viewBox="0 0 240 160">
       <ellipse cx="120" cy="80" rx="117" ry="77" fill="url(#g-band)"/>
       <ellipse cx="120" cy="80" rx="109" ry="69" fill="none" stroke="url(#g-gold)" stroke-width="1.6"/>
@@ -118,7 +143,7 @@
 
 <!-- ══ NAV ══ -->
 <header class="nav" id="nav">
-  <a class="nav-logo" href="#top" aria-label="Joy"><svg aria-hidden="true"><use href="#seal"/></svg></a>
+  <a class="nav-logo" href="#top" aria-label="Joy"><svg aria-hidden="true"><use href="#logo"/></svg></a>
   <nav aria-label="Primary">
     <ul class="nav-links">
       <li><a href="#collection" data-i18n="nav.collection">Collection</a></li>
@@ -168,6 +193,14 @@
 <section class="hero" id="top" data-bg style="--bg:#E8F3F2" data-fx="none">
   <canvas class="liquid" id="liquid" aria-hidden="true"></canvas>
   <div class="hero-fallback" aria-hidden="true"></div>
+  <!-- desserts served on porcelain around the wordmark -->
+  <div class="plates" id="plates" aria-hidden="true">
+    <span class="plate pl-1" data-depth="0.9" style="--in:1.45s"><span class="plate-in"><img src="assets/img/plate-trilece.webp" srcset="assets/img/plate-trilece-sm.webp 300w, assets/img/plate-trilece.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
+    <span class="plate pl-2" data-depth="0.6" style="--in:1.6s"><span class="plate-in"><img src="assets/img/plate-strawberry.webp" srcset="assets/img/plate-strawberry-sm.webp 300w, assets/img/plate-strawberry.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
+    <span class="plate pl-3" data-depth="0.8" style="--in:1.52s"><span class="plate-in"><img src="assets/img/plate-beirut.webp" srcset="assets/img/plate-beirut-sm.webp 300w, assets/img/plate-beirut.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
+    <span class="plate pl-4" data-depth="0.55" style="--in:1.68s"><span class="plate-in"><img src="assets/img/plate-mango.webp" srcset="assets/img/plate-mango-sm.webp 300w, assets/img/plate-mango.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
+    <span class="plate pl-5" data-depth="0.35" style="--in:1.76s"><span class="plate-in"><img src="assets/img/plate-balls.webp" srcset="assets/img/plate-balls-sm.webp 300w, assets/img/plate-balls.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
+  </div>
   <div class="hero-inner" id="heroInner">
     <p class="hero-eyebrow" data-i18n="hero.eyebrow">Handmade with love · Fresh for you</p>
     <h1 class="hero-title">
@@ -185,6 +218,7 @@
           <text class="mark-stroke" x="520" y="350" text-anchor="middle">Joy</text>
           <text class="mark-glint" x="520" y="350" text-anchor="middle" fill="url(#glintHero)">Joy</text>
         </svg>
+        <svg class="mark-cherry" viewBox="0 0 1000 560"><g class="cherry-drop"><use href="#cherry" transform="translate(664 35) scale(1.2)"/></g></svg>
       </span>
     </h1>
     <p class="hero-line" data-i18n="hero.line" data-split>Pure <em>joy</em> in every spoonful.</p>
@@ -539,6 +573,7 @@
       </defs>
       <text class="mark-glint" x="520" y="350" text-anchor="middle" fill="url(#glintFoot)">Joy</text>
     </svg>
+    <svg class="mark-cherry" viewBox="0 0 1000 560"><use href="#cherry" transform="translate(664 35) scale(1.2)"/></svg>
   </span>
   <p class="footer-line" data-i18n="ft.line">Pure joy in every spoonful.</p>
   <p class="footer-info" data-i18n="ft.info">Delivery across the Haifa area · Pickup everywhere else · Order 2 days ahead</p>

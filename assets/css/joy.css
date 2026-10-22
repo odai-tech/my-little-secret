@@ -1044,6 +1044,38 @@ html.cart-open, html.cart-open body { overflow: hidden; }
 .cart-sent-t { font-weight: 700; }
 .cart-sent-d { margin-top: 2px; font-size: .8rem; line-height: 1.45; opacity: .78; }
 .cart-sent-d a { text-decoration: underline; text-underline-offset: 3px; word-break: break-all; }
+
+/* payment (step 4): wallets and card fields come from the payment provider */
+.pay-box { margin-top: 14px; padding: 16px; border-radius: 20px; background: #FFF; box-shadow: inset 0 0 0 1px rgba(46,138,198,.18), 0 16px 30px -24px rgba(14,58,85,.5); animation: swap .45s var(--ease-out); }
+.pay-step.is-later .pay-box { display: none; }
+.pay-express:empty, .pay-element:empty { display: none; }
+.pay-or { display: flex; align-items: center; gap: 12px; margin: 14px 0; font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(14,58,85,.55); }
+.pay-or::before, .pay-or::after { content: ''; flex: 1; height: 1px; background: rgba(46,138,198,.2); }
+.pay-demo-wallets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pay-demo-btn { display: grid; place-items: center; height: 46px; border-radius: 12px; font-weight: 700; font-size: .95rem; letter-spacing: .01em; }
+.pay-demo-btn.is-apple { background: #000; color: #FFF; }
+.pay-demo-btn.is-google { background: #FFF; color: #3C4043; box-shadow: inset 0 0 0 1px #DADCE0; }
+.pay-demo-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pay-demo-card span { height: 46px; padding: 0 14px; display: flex; align-items: center; border-radius: 12px; background: #F6FAFD; box-shadow: inset 0 0 0 1px rgba(30,54,56,.14); font-size: .86rem; color: rgba(14,58,85,.45); }
+.pay-demo-card .is-wide { grid-column: 1 / -1; }
+.pay-demo-note { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #FFF6DA; color: #6E4500; font-size: .78rem; line-height: 1.45; }
+.pay-redirect { font-size: .86rem; line-height: 1.5; }
+.pay-secure { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; font-size: .76rem; line-height: 1.45; color: rgba(14,58,85,.66); }
+.pay-secure svg { flex-shrink: 0; margin-top: 1px; color: #2B8C92; }
+.pay-step .field-err { margin-top: 10px; }
+.btn-pay { --accent: var(--cherry); }
+.btn-pay.is-busy { pointer-events: none; opacity: .75; }
+.btn-pay.is-busy svg { animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { to { opacity: .35; } }
+.cart-paid { display: grid; justify-items: center; gap: 8px; padding: 6px 4px 16px; text-align: center; animation: swap .5s var(--ease-out); outline: none; }
+.cart-paid-mark { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 50%; color: #FFF; background: linear-gradient(150deg, #5CC7A8, #1F9A7A); box-shadow: 0 16px 30px -14px rgba(31,154,122,.8); }
+.cart-paid-t { font: italic 400 1.5rem/1.2 var(--f-display); font-variation-settings: "SOFT" 100; }
+.cart-paid-id { font-size: .86rem; opacity: .8; }
+.cart-paid-id b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.cart-paid-d { font-size: .86rem; line-height: 1.5; opacity: .75; }
+.cart-paid .btn { margin-top: 8px; width: 100%; }
+.cart.is-paid .cart-body, .cart.is-paid .cart-actions, .cart.is-paid .cart-fine, .cart.is-paid .cart-sent { display: none; }
+.cart.is-paid .cart-foot { flex: 1; display: grid; align-content: center; }
 .cart-copy { margin-top: 8px; font-size: .78rem; font-weight: 700; color: #2B8C92; text-decoration: underline; text-underline-offset: 3px; }
 
 /* the floating box */

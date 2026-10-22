@@ -1,0 +1,14 @@
+{
+  "name": "joy-desserts",
+  "private": true,
+  "description": "Joy dessert shop: static website plus a small order & payment API",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/dev-server.js",
+    "test": "node --test server/test/*.test.js"
+  },
+  "dependencies": {
+    "stripe": "^22.6.2"
+  }
+}

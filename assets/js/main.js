@@ -5,14 +5,12 @@
 (function () {
   'use strict';
 
-  /* ── contact & ordering rules ──────────────────────────────── */
-  const CONTACT = {
-    email: 'mylittlesecret782@gmail.com',
-    // TODO: WhatsApp number in international format, digits only (e.g. '972501234567').
-    // Leave empty to hide the WhatsApp buttons and order by email only.
-    whatsapp: '',
-  };
-  const ORDER_DAYS = 2;   // orders need at least this many days' notice
+  /* ── settings (assets/js/config.js) and the menu (assets/js/catalog.js) ── */
+  const CONF = window.JOY_CONFIG || {};
+  const CONTACT = Object.assign({ email: 'mylittlesecret782@gmail.com', whatsapp: '' }, CONF.contact);
+  const API = (CONF.apiBase || '/api').replace(/\/$/, '');
+  const MENU = window.JOY_CATALOG;
+  const ORDER_DAYS = MENU.minNoticeDays;   // orders need at least this many days' notice
 
   /* ── helpers ───────────────────────────────────────────────── */
   const $ = (s, r) => (r || document).querySelector(s);
@@ -96,7 +94,14 @@
 
   /* ── dates: the 2-day rule, shown live ─────────────────────── */
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const addDays = n => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d; };
+  /* days count in Haifa time, as the order server does, whatever the visitor's own clock zone */
+  function shopToday() {
+    try {
+      const [y, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: MENU.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-');
+      return new Date(+y, m - 1, +d, 12);
+    } catch (e) { const d = new Date(); d.setHours(12, 0, 0, 0); return d; }
+  }
+  const addDays = n => { const d = shopToday(); d.setDate(d.getDate() + n); return d; };
   const fmt = (d, o) => { try { return new Intl.DateTimeFormat(lang, o).format(d); } catch (e) { return d.toDateString(); } };
   const earliestLabel = () => fmt(addDays(ORDER_DAYS), { weekday: 'long', day: 'numeric', month: 'long' });
   function renderCalendar() {
@@ -566,21 +571,10 @@
   }
 
   /* ── the box ───────────────────────────────────────────────── */
-  const CATALOG = [
-    { id: 'trilece', key: 'p.trilece', group: 'sig', img: 'assets/img/trilece-sm.webp' },
-    { id: 'beirut', key: 'p.beirut', group: 'sig', img: 'assets/img/beirut-stack-sm.webp' },
-    { id: 'balls', key: 'p.balls', group: 'sig', img: 'assets/img/choco-box-sm.webp' },
-    { id: 'cc-blueberry', flavour: 'blueberry', group: 'cheese', crop: [62, 73] },
-    { id: 'cc-mango', flavour: 'mango', group: 'cheese', crop: [43.5, 38] },
-    { id: 'cc-strawberry', flavour: 'strawberry', group: 'cheese', crop: [79, 42] },
-    { id: 'cc-lotus', flavour: 'lotus', group: 'cheese', crop: [25.5, 71] },
-    { id: 'cc-chocolate', flavour: 'chocolate', group: 'cheese', crop: [64.5, 15] },
-    { id: 'dates', key: 'p.dates', group: 'more', mono: 'D' },
-    { id: 'basbousa', key: 'p.basbousa', group: 'more', mono: 'B' },
-  ];
+  const CATALOG = MENU.items;
   /* every dessert comes in two sizes; prices in shekels */
-  const SIZES = { s: { key: 'size.s', price: 100 }, l: { key: 'size.l', price: 200 } };
-  const DEFAULT_SIZE = 'l';
+  const SIZES = MENU.sizes;
+  const DEFAULT_SIZE = MENU.defaultSize;
   const FAVOURITES = ['trilece', 'beirut', 'balls', 'cc-lotus'];
   const byId = id => CATALOG.find(i => i.id === id);
   const itemName = i => i.flavour ? `${t('p.cheese.name')} · ${t(`fl.${i.flavour}.name`)}` : t(`${i.key}.name`);
@@ -768,6 +762,7 @@
       return `<button type="button" class="quick" data-add="${id}">${thumb(i)}<span>${esc(itemName(i))}<small>${esc(sizeName(DEFAULT_SIZE))} · ${esc(money(SIZES[DEFAULT_SIZE].price))}</small></span><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button>`;
     }).join('');
     if (ls.length) setErr('errItems', '');
+    renderPayBtn();
   }
   function renderDays() {
     const wrap = $('#days'); if (!wrap) return;
@@ -829,6 +824,11 @@
     const dv = $('#fDate').value;
     check('errDate', !dv ? t('box.needDate') : (dateTooSoon(dv) ? t('box.tooSoon') : ''), otherDay ? $('#fDate') : $('#days .day'));
     check('errName', $('#fName').value.trim() ? '' : t('box.needName'), $('#fName'));
+    if (payNow()) {
+      const ls = boxLines();
+      if (ls.length && (ls.some(l => l.q > MENU.maxPerLine) || total() > MENU.maxUnits)) check('errItems', t('pay.tooMany'), $('#cartItems [data-step="-1"]'));
+      check('errPhone', PHONE_OK.test($('#fPhone').value.trim()) ? '' : t('box.needPhone'), $('#fPhone'));
+    } else setErr('errPhone', '');
     if (!first) return true;
     first.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
     first.focus({ preventScroll: true });
@@ -844,6 +844,7 @@
     if (cart.open) return;
     renderCart(); renderDays();
     $('#cartSent').hidden = true;
+    cart.classList.remove('is-paid'); $('#cartPaid').hidden = true;
     cart.showModal();
     html.classList.add('cart-open');
     requestAnimationFrame(() => requestAnimationFrame(() => cart.classList.add('is-open')));
@@ -902,7 +903,7 @@
     syncMethod();
     form.addEventListener('input', e => {
       local.set('joy-form', JSON.stringify({ method: method(), address: $('#fAddress').value, name: $('#fName').value, phone: $('#fPhone').value }));
-      const err = { fAddress: 'errAddress', fName: 'errName', fDate: 'errDate' }[e.target.id];
+      const err = { fAddress: 'errAddress', fName: 'errName', fDate: 'errDate', fPhone: 'errPhone' }[e.target.id];
       if (err && e.target.value.trim()) setErr(err, '');
     });
     form.addEventListener('change', e => {
@@ -942,6 +943,194 @@
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(es => { summaryOnScreen = es[0].isIntersecting; updateCartBar(); }, { threshold: .25 }).observe($('#summary'));
     }
+  }
+
+  /* ── payment: Apple Pay, Google Pay and cards through the order server (server/).
+     The step appears only when GET {apiBase}/config offers a payment provider; without
+     one the checkout sends the order by email or WhatsApp to pay later, as before.
+     Card details are typed into the provider's own fields (Stripe) or on its secure
+     page (redirect providers), never into this page. Previews get a demo that takes no money. */
+  const PHONE_OK = /^\+?[0-9 ()\-]{7,20}$/;
+  const pay = { cfg: null, mode: 'later', stripe: null, elements: null, loading: false, attempt: null, busy: false };
+  const payNow = () => !!pay.cfg && pay.mode === 'now';
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const newKey = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+  const PENDING = 'joy-pay';   // the order being paid, so the return from the payment page can be matched
+
+  async function loadPayConfig() {
+    try {
+      const res = await fetch(`${API}/config`, { headers: { accept: 'application/json' } });
+      const data = res.ok && /json/.test(res.headers.get('content-type') || '') ? await res.json() : null;
+      if (data && data.payments) return data;
+    } catch (e) { /* no order server: pay later */ }
+    // previews only (never ?demo on the live site): a pretend payment must not look like a real order
+    return window.JOY_PREVIEW === true ? { payments: { provider: 'demo', kind: 'demo' }, payLater: true } : null;
+  }
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.async = true; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  function setLabel(el, key) { el.dataset.i18n = key; el.innerHTML = t(key); }
+  function renderPayBtn() {
+    const b = $('#payBtnT'); if (!b) return;
+    b.textContent = pay.busy ? t('pay.working') : t('pay.btn').replace('{p}', money(totalPrice()));
+    if (pay.elements && totalPrice() > 0) {
+      try { pay.elements.update({ amount: totalPrice() * 100, locale: lang }); } catch (e) { /* still loading */ }
+    }
+  }
+  function syncPay() {
+    if (!pay.cfg) return;
+    pay.mode = $('#payNow').checked || !pay.cfg.payLater ? 'now' : 'later';
+    const now = pay.mode === 'now', kind = pay.cfg.payments.kind;
+    $('#payStep').classList.toggle('is-later', !now);
+    $('#payBtn').hidden = !now;
+    $('#sendMail').hidden = now;
+    $('#sendWa').hidden = now || !CONTACT.whatsapp;
+    $('#payDemo').hidden = kind !== 'demo';
+    $('#payRedirect').hidden = kind !== 'redirect';
+    setLabel($('#cartFine'), now ? 'pay.fine' : 'pay.later.note');
+    setLabel($('#phoneLabel'), now ? 'box.phone.req' : 'box.phone');
+    if (!now) { setErr('errPhone', ''); setErr('errPay', ''); }
+    renderPayBtn();
+    if (now && kind === 'elements') mountStripe();
+  }
+  async function mountStripe() {
+    if (pay.elements || pay.loading) return;
+    pay.loading = true;
+    const p = pay.cfg.payments;
+    try {
+      if (!window.Stripe) await loadScript('https://js.stripe.com/v3/');
+      pay.stripe = window.Stripe(p.publishableKey);
+      pay.elements = pay.stripe.elements({
+        mode: 'payment', amount: Math.max(1, totalPrice()) * 100, currency: p.currency || 'ils', locale: lang,
+        appearance: { theme: 'stripe', variables: { colorPrimary: '#2E8AC6', colorText: '#0E3A55', colorDanger: '#B4472B', borderRadius: '12px', fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif' } },
+      });
+      const express = pay.elements.create('expressCheckout', { buttonType: { applePay: 'buy', googlePay: 'buy' }, buttonHeight: 48 });
+      express.on('ready', e => {
+        const any = !!e.availablePaymentMethods && Object.values(e.availablePaymentMethods).some(Boolean);
+        $('#payExpress').hidden = !any; $('#payOr').hidden = !any;
+      });
+      express.on('click', e => { if (validate()) e.resolve(); });   // the wallet sheet opens only for a complete order
+      express.on('confirm', e => payWithStripe(e).catch(() => { e.paymentFailed({ reason: 'fail' }); payError(t('pay.failed')); }));
+      express.mount('#payExpress');
+      pay.elements.create('payment', { layout: 'tabs' }).mount('#payElement');
+    } catch (e) {
+      pay.elements = null;
+      payError(t('pay.failed'));
+    }
+    pay.loading = false;
+  }
+  function orderPayload() {
+    const m = method();
+    return {
+      items: boxLines().map(l => ({ id: l.item.id, size: l.size, qty: l.q })),
+      method: m, address: m === 'delivery' ? $('#fAddress').value.trim() : '', date: $('#fDate').value,
+      name: $('#fName').value.trim(), phone: $('#fPhone').value.trim(), notes: $('#fNotes').value.trim(), lang,
+    };
+  }
+  /* POST /orders. A retry of the very same order reuses its key, so it can't be charged twice. */
+  async function createOrder() {
+    const body = orderPayload(), sig = JSON.stringify(body);
+    if (!pay.attempt || pay.attempt.sig !== sig) pay.attempt = { sig, key: newKey() };
+    let res, data;
+    try {
+      res = await fetch(`${API}/orders`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ idempotencyKey: pay.attempt.key }, body)) });
+      data = await res.json().catch(() => ({}));
+    } catch (e) { payError(t('pay.failed')); return null; }
+    if (res.status === 201 && data.orderId) return data;
+    if (res.status === 422 && Array.isArray(data.fields)) { serverErrors(data.fields); return null; }
+    payError(t(res.status === 429 ? 'pay.busy' : 'pay.failed'));
+    return null;
+  }
+  function serverErrors(fields) {
+    const map = { items: ['errItems', 'box.needItems'], address: ['errAddress', 'box.needAddress'], date: ['errDate', 'box.tooSoon'], name: ['errName', 'box.needName'], phone: ['errPhone', 'box.needPhone'], method: ['errPay', 'pay.failed'] };
+    let first = null;
+    fields.forEach(f => { if (!map[f]) return; setErr(map[f][0], t(map[f][1])); if (!first) first = $('#' + map[f][0]); });
+    if (first) first.closest('.field, .cart-step, .cart-body').scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  }
+  function payError(msg) {
+    setErr('errPay', msg);
+    const e = $('#errPay'); if (msg && e && !$('#payStep').hidden) e.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  }
+  function setBusy(on) {
+    pay.busy = on;
+    const b = $('#payBtn'); b.classList.toggle('is-busy', on); b.setAttribute('aria-busy', String(on));
+    renderPayBtn();
+  }
+  const remember = id => local.set(PENDING, JSON.stringify({ id, at: Date.now() }));
+  const returnUrl = id => `${location.origin}${location.pathname}?paid=${encodeURIComponent(id)}#order`;
+
+  /* Stripe: card fields (Pay button) or a wallet sheet (`walletEvent`), both confirmed here. */
+  async function payWithStripe(walletEvent) {
+    const failed = msg => { if (walletEvent) walletEvent.paymentFailed({ reason: 'fail' }); payError(msg); };
+    const submitted = await pay.elements.submit();
+    if (submitted.error) { if (walletEvent) walletEvent.paymentFailed({ reason: 'fail' }); return; }   // Stripe shows the field error itself
+    const order = await createOrder();
+    if (!order || !order.clientSecret) { if (walletEvent) walletEvent.paymentFailed({ reason: 'fail' }); return; }
+    remember(order.orderId);
+    const done = await pay.stripe.confirmPayment({ elements: pay.elements, clientSecret: order.clientSecret, confirmParams: { return_url: returnUrl(order.orderId) }, redirect: 'if_required' });
+    if (done.error) return failed(done.error.message || t('pay.failed'));
+    showPaid(order.orderId);
+  }
+  async function startPayment() {
+    if (pay.busy || !validate()) return;
+    setErr('errPay', '');
+    setBusy(true);
+    let leaving = false;
+    try {
+      const kind = pay.cfg.payments.kind;
+      if (kind === 'demo') { await wait(1100); showPaid(`JOY-DEMO-${newKey().replace(/-/g, '').slice(0, 6).toUpperCase()}`); }
+      else if (kind === 'elements') { if (pay.elements) await payWithStripe(); else payError(t('pay.failed')); }
+      else {
+        const order = await createOrder();
+        if (order && order.kind === 'redirect' && order.url) { remember(order.orderId); leaving = true; location.href = order.url; }
+        else if (order) payError(t('pay.failed'));
+      }
+    } catch (e) { payError(t('pay.failed')); }
+    if (!leaving) setBusy(false);
+  }
+  function showPaid(id) {
+    local.set(PENDING, '');
+    Object.keys(bag).forEach(k => delete bag[k]);
+    local.set('joy-box', '{}');
+    pay.attempt = null;
+    renderMenu(); renderSummary();
+    openCart();
+    $('#cartPaidId').textContent = id;
+    $('#cartPaid').hidden = false;
+    cart.classList.add('is-paid');
+    requestAnimationFrame(() => $('#cartPaid').focus({ preventScroll: true }));
+  }
+  /* Back from a payment page: ?paid=ID (Stripe adds redirect_status) or ?canceled=1. */
+  function returnFromPayment() {
+    const q = new URLSearchParams(location.search);
+    const id = q.get('paid'), status = q.get('redirect_status');
+    if (!id && !q.has('canceled')) return;
+    history.replaceState(null, '', location.pathname + location.hash);
+    let pending = null;
+    try { pending = JSON.parse(local.get(PENDING) || 'null'); } catch (e) { pending = null; }
+    if (q.has('canceled')) { toast(t('pay.canceled')); return; }
+    if (!pending || pending.id !== id) return;   // not an order paid from this browser
+    if (status === 'failed') { openCart(); payError(t('pay.failed')); return; }
+    showPaid(id);
+  }
+  function bindPay() {
+    $$('input[name="pay"]').forEach(r => r.addEventListener('change', syncPay));
+    $('#payBtn').addEventListener('click', startPayment);
+    $('#cartPaidBack').addEventListener('click', closeCart);
+    loadPayConfig().then(cfg => {
+      if (cfg) {
+        pay.cfg = cfg;
+        $('#payStep').hidden = false;
+        $('#payChoice').hidden = !cfg.payLater;
+        $('#payNow').checked = true;
+        syncPay();
+      }
+      returnFromPayment();
+    });
   }
 
   /* ── nav: language, mobile sheet ───────────────────────────── */
@@ -1051,7 +1240,7 @@
     if (reduce) deck.el.classList.add('is-static');
     initLiquid();
     if (window.JoyFX && !reduce) JoyFX.init($('#fx'));
-    bindNav(); bindPointerFx(); bindFlavours(); bindTable(); bindLightbox(); bindBox(); bindReveals();
+    bindNav(); bindPointerFx(); bindFlavours(); bindTable(); bindLightbox(); bindBox(); bindPay(); bindReveals();
     setFlavour('blueberry');
 
     document.addEventListener('pointermove', e => {

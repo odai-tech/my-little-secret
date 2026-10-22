@@ -616,6 +616,7 @@
     $('#summaryList').innerHTML = ids.map(i => `<li><span>${esc(itemName(i))}</span><b>× ${bag[i.id]}</b></li>`).join('');
     $('#summaryEmpty').hidden = ids.length > 0;
     $('#boxCount').textContent = n;
+    boxBtn.classList.toggle('is-empty', !n);   // red only when something is in the box
     $('#cartBarCount').textContent = n;
     renderCart();
     updateCartBar();

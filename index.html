@@ -65,6 +65,23 @@
       <ellipse cx="-9" cy="-7" rx="6.5" ry="3.8" transform="rotate(-38 -9 -7)" fill="#fff" opacity=".85"/>
       <ellipse cx="11" cy="11" rx="3.4" ry="1.8" transform="rotate(-30 11 11)" fill="#fff" opacity=".3"/>
     </g>
+    <linearGradient id="g-silver" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#B7C1C6"/>
+      <stop offset=".35" stop-color="#F8FAFB"/>
+      <stop offset=".62" stop-color="#A9B4BA"/>
+      <stop offset="1"   stop-color="#E6EBED"/>
+    </linearGradient>
+    <radialGradient id="g-silver-bowl" cx=".42" cy=".38" r=".7">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".55" stop-color="#D9E0E3"/>
+      <stop offset="1" stop-color="#9FAAB0"/>
+    </radialGradient>
+    <!-- a dessert spoon, bowl up -->
+    <symbol id="spoon" viewBox="0 0 40 200">
+      <path d="M20 4C30 4 36 18 36 32C36 46 29 56 23 60L22.5 70C22.3 110 23.6 150 25.5 186C25.8 192 23.4 196 20 196C16.6 196 14.2 192 14.5 186C16.4 150 17.7 110 17.5 70L17 60C11 56 4 46 4 32C4 18 10 4 20 4Z" fill="url(#g-silver)"/>
+      <path d="M20 9C27 9 31 20 31 31C31 42 26 50 20 52C14 50 9 42 9 31C9 20 13 9 20 9Z" fill="url(#g-silver-bowl)"/>
+      <path d="M14.5 24C15.5 17 17.5 13.5 21 12.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/>
+    </symbol>
     <!-- the site logo: the Joy script with a cherry on the J -->
     <symbol id="logo" viewBox="0 -14 170 138">
       <text x="80" y="90" text-anchor="middle" font-family="Great Vibes, cursive" font-size="84" fill="url(#g-sky)" stroke="url(#g-sky)" stroke-width="1.4" stroke-linejoin="round">Joy</text>
@@ -195,10 +212,10 @@
   <div class="hero-fallback" aria-hidden="true"></div>
   <!-- desserts served on porcelain around the wordmark -->
   <div class="plates" id="plates" aria-hidden="true">
-    <span class="plate pl-1" data-depth="0.9" style="--in:1.45s"><span class="plate-in"><img src="assets/img/plate-trilece.webp" srcset="assets/img/plate-trilece-sm.webp 300w, assets/img/plate-trilece.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
-    <span class="plate pl-2" data-depth="0.6" style="--in:1.6s"><span class="plate-in"><img src="assets/img/plate-strawberry.webp" srcset="assets/img/plate-strawberry-sm.webp 300w, assets/img/plate-strawberry.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
-    <span class="plate pl-3" data-depth="0.8" style="--in:1.52s"><span class="plate-in"><img src="assets/img/plate-beirut.webp" srcset="assets/img/plate-beirut-sm.webp 300w, assets/img/plate-beirut.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
-    <span class="plate pl-4" data-depth="0.55" style="--in:1.68s"><span class="plate-in"><img src="assets/img/plate-mango.webp" srcset="assets/img/plate-mango-sm.webp 300w, assets/img/plate-mango.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"></span></span>
+    <span class="plate pl-1" data-depth="0.9" style="--in:1.45s"><span class="plate-in"><img src="assets/img/plate-trilece.webp" srcset="assets/img/plate-trilece-sm.webp 300w, assets/img/plate-trilece.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"><svg class="plate-spoon"><use href="#spoon"/></svg></span></span>
+    <span class="plate pl-2" data-depth="0.6" style="--in:1.6s"><span class="plate-in"><img src="assets/img/plate-strawberry.webp" srcset="assets/img/plate-strawberry-sm.webp 300w, assets/img/plate-strawberry.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"><svg class="plate-spoon"><use href="#spoon"/></svg></span></span>
+    <span class="plate pl-3" data-depth="0.8" style="--in:1.52s"><span class="plate-in"><img src="assets/img/plate-beirut.webp" srcset="assets/img/plate-beirut-sm.webp 300w, assets/img/plate-beirut.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"><svg class="plate-spoon"><use href="#spoon"/></svg></span></span>
+    <span class="plate pl-4" data-depth="0.55" style="--in:1.68s"><span class="plate-in"><img src="assets/img/plate-mango.webp" srcset="assets/img/plate-mango-sm.webp 300w, assets/img/plate-mango.webp 560w" sizes="(max-width: 560px) 34vw, 18vw" width="560" height="560" alt="" decoding="async"><svg class="plate-spoon"><use href="#spoon"/></svg></span></span>
   </div>
   <div class="hero-inner" id="heroInner">
     <p class="hero-eyebrow" data-i18n="hero.eyebrow">Handmade with love · Fresh for you</p>

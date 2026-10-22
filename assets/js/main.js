@@ -79,8 +79,10 @@
     $$('[data-split]').forEach(el => splitWords(el));
     splitManifesto();
     buildRibbons();
+    renderSizePicks();
     renderMenu();
     renderSummary();
+    renderReviews();
     showFlavourText();
     renderCalendar();
     setDateLimits();
@@ -552,7 +554,7 @@
     dlgImg.alt = ($('img', card) || {}).alt || '';
     $('#lightboxName').textContent = card.dataset.name.split('|').map(t).join(' · ');
     const item = card.dataset.item, add = $('#lightboxAdd');
-    add.hidden = !item; $('#lightboxPick').hidden = !!item;
+    add.hidden = !item; $('#lightboxPick').hidden = !!item; $('.lightbox-bar .size-pick').hidden = !item;
     if (item) { add.dataset.add = item; resetAdd(add); }
     dlg.showModal();
   }
@@ -576,14 +578,29 @@
     { id: 'dates', key: 'p.dates', group: 'more', mono: 'D' },
     { id: 'basbousa', key: 'p.basbousa', group: 'more', mono: 'B' },
   ];
+  /* every dessert comes in two sizes; prices in shekels */
+  const SIZES = { s: { key: 'size.s', price: 100 }, l: { key: 'size.l', price: 200 } };
+  const DEFAULT_SIZE = 'l';
   const FAVOURITES = ['trilece', 'beirut', 'balls', 'cc-lotus'];
   const byId = id => CATALOG.find(i => i.id === id);
   const itemName = i => i.flavour ? `${t('p.cheese.name')} · ${t(`fl.${i.flavour}.name`)}` : t(`${i.key}.name`);
   const itemNotes = i => i.flavour ? t(`fl.${i.flavour}.desc`) : listOf(`${i.key}.notes`).join(' · ');
+  const sizeName = sz => t(SIZES[sz].key);
+  const lineKey = (id, sz) => `${id}|${sz}`;
+  const money = n => { try { return new Intl.NumberFormat(lang, { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n); } catch (e) { return `₪${n}`; } };
   let bag = {};
   try { bag = JSON.parse(local.get('joy-box') || '{}') || {}; } catch (e) { bag = {}; }
-  Object.keys(bag).forEach(k => { if (!byId(k) || !(bag[k] > 0)) delete bag[k]; });
+  Object.keys(bag).forEach(k => {   // boxes saved before sizes existed: those were the big size
+    if (!k.includes('|') && byId(k) && bag[k] > 0) { const nk = lineKey(k, DEFAULT_SIZE); bag[nk] = (bag[nk] || 0) + bag[k]; }
+    const [id, sz] = k.split('|');
+    if (!byId(id) || !SIZES[sz] || !(bag[k] > 0)) delete bag[k];
+  });
+  const boxLines = () => CATALOG.flatMap(i => Object.keys(SIZES).filter(sz => bag[lineKey(i.id, sz)]).map(sz => {
+    const key = lineKey(i.id, sz);
+    return { key, item: i, size: sz, q: bag[key], price: SIZES[sz].price };
+  }));
   const total = () => Object.values(bag).reduce((a, b) => a + b, 0);
+  const totalPrice = () => boxLines().reduce((a, l) => a + l.q * l.price, 0);
 
   function cropStyle(c) {
     const k = 2.85, ar = 900 / 1206;
@@ -596,8 +613,8 @@
     if (i.crop) return `<span class="menu-thumb" style="${cropStyle(i.crop)}"></span>`;
     return `<span class="menu-thumb is-mono" aria-hidden="true">${i.mono}</span>`;
   }
-  function stepper(i) {
-    const q = bag[i.id] || 0, full = esc(itemName(i));
+  function stepper(key, label) {
+    const q = bag[key] || 0, full = esc(label);
     return `<div class="stepper"><button type="button" data-step="-1" aria-label="${esc(t('stepper.remove'))}: ${full}"${q ? '' : ' disabled'}><svg width="16" height="16" aria-hidden="true"><use href="#i-minus"/></svg></button>` +
       `<output aria-live="polite">${q}</output>` +
       `<button type="button" data-step="1" aria-label="${esc(t('stepper.add'))}: ${full}"><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button></div>`;
@@ -608,30 +625,32 @@
     menu.innerHTML = groups.map(([g, k]) => `<div class="menu-group"><h3>${esc(t(k))}</h3>` +
       CATALOG.filter(i => i.group === g).map(i => {
         const name = i.flavour ? t(`fl.${i.flavour}.name`) : t(`${i.key}.name`);
-        return `<div class="menu-row" data-id="${i.id}">${thumb(i)}<div><p class="menu-name">${esc(name)}</p><p class="menu-notes">${esc(itemNotes(i))}</p></div>${stepper(i)}</div>`;
+        const sizes = Object.keys(SIZES).map(sz => `<div class="size-line" data-id="${lineKey(i.id, sz)}"><span class="size-name">${esc(sizeName(sz))} <b>${SIZES[sz].price}</b></span>${stepper(lineKey(i.id, sz), `${itemName(i)} (${sizeName(sz)})`)}</div>`).join('');
+        return `<div class="menu-row" data-item="${i.id}">${thumb(i)}<div class="menu-info"><p class="menu-name">${esc(name)}</p><p class="menu-notes">${esc(itemNotes(i))}</p></div><div class="menu-sizes">${sizes}</div></div>`;
       }).join('') + '</div>').join('');
   }
   function renderSummary() {
-    const ids = CATALOG.filter(i => bag[i.id]), n = total();
-    $('#summaryList').innerHTML = ids.map(i => `<li><span>${esc(itemName(i))}</span><b>× ${bag[i.id]}</b></li>`).join('');
-    $('#summaryEmpty').hidden = ids.length > 0;
+    const ls = boxLines(), n = total();
+    $('#summaryList').innerHTML = ls.map(l => `<li><span>${esc(itemName(l.item))} <small>${esc(sizeName(l.size))}</small></span><b>${l.q} × ${l.price}</b></li>`).join('') +
+      (ls.length ? `<li class="summary-total"><span>${esc(t('box.total'))}</span><b>${esc(money(totalPrice()))}</b></li>` : '');
+    $('#summaryEmpty').hidden = ls.length > 0;
     $('#boxCount').textContent = n;
     boxBtn.classList.toggle('is-empty', !n);   // red only when something is in the box
     $('#cartBarCount').textContent = n;
+    $('#cartBarTotal').textContent = n ? money(totalPrice()) : '';
     renderCart();
     updateCartBar();
   }
-  function setQty(id, q) {
+  function setQty(key, q) {
     q = clamp(q | 0, 0, 99);
-    if (q) bag[id] = q; else delete bag[id];
+    if (q) bag[key] = q; else delete bag[key];
     local.set('joy-box', JSON.stringify(bag));
-    const row = $(`.menu-row[data-id="${id}"]`);
-    if (row) {
+    $$(`.size-line[data-id="${key}"]`).forEach(row => {
       $('output', row).textContent = q;
       $('[data-step="-1"]', row).disabled = !q;
-    }
+    });
     renderSummary();
-    $$(`[data-id="${id}"] output`).forEach(out => { out.classList.remove('is-pop'); void out.offsetWidth; out.classList.add('is-pop'); });
+    $$(`[data-id="${key}"] output`).forEach(out => { out.classList.remove('is-pop'); void out.offsetWidth; out.classList.add('is-pop'); });
   }
   const boxBtn = $('#boxBtn');
   function bump() { [boxBtn, cartBar].forEach(b => { b.classList.remove('is-bump'); void b.offsetWidth; b.classList.add('is-bump'); }); }
@@ -669,14 +688,30 @@
     if (label) label.textContent = t('add');
     if (icon) icon.setAttribute('href', '#i-plus');
   }
+  /* the size chosen next to an add button (the big size when there's no picker) */
+  function chosenSize(btn) {
+    const scope = btn.closest('.chapter-copy, .flavour-detail, .lightbox-bar');
+    const on = scope && $('.size-pick [aria-pressed="true"]', scope);
+    return on ? on.dataset.size : DEFAULT_SIZE;
+  }
+  function renderSizePicks() {
+    $$('[data-size-pick]').forEach(el => {
+      const cur = el.dataset.cur || DEFAULT_SIZE;
+      el.setAttribute('role', 'group'); el.setAttribute('aria-label', t('size.label'));
+      el.innerHTML = Object.keys(SIZES).map(sz => `<button type="button" data-size="${sz}" aria-pressed="${sz === cur}">${esc(sizeName(sz))} <b>${SIZES[sz].price}</b></button>`).join('');
+    });
+    $$('[data-price-from]').forEach(el => { el.textContent = t('price.from').replace('{p}', money(SIZES.s.price)); });
+    $$('[data-price-note]').forEach(el => { el.textContent = Object.keys(SIZES).map(sz => `${sizeName(sz)} ${money(SIZES[sz].price)}`).join(' · '); });
+  }
   function addToBox(id, btn) {
     const item = byId(id); if (!item) return;
-    setQty(id, (bag[id] || 0) + 1);
+    const size = chosenSize(btn), key = lineKey(id, size);
+    setQty(key, (bag[key] || 0) + 1);
     const from = (btn.closest('.chapter') && $('.lid', btn.closest('.chapter'))) ||
                  (btn.closest('.flavours') && $('.spot-ring', btn.closest('.flavours'))) || btn;
     fly(from, item);
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* not allowed */ } }
-    toast(t('toast.added').replace('{name}', itemName(item)));
+    toast(t('toast.added').replace('{name}', `${itemName(item)} (${sizeName(size)})`));
     const label = $('[data-i18n="add"]', btn), icon = $('use', btn);
     if (!label) return;
     btn.classList.remove('is-added'); void btn.offsetWidth; btn.classList.add('is-added');
@@ -686,6 +721,29 @@
     btn._t = setTimeout(() => resetAdd(btn), 1700);
   }
 
+  /* ── reviews ── Demo entries (demo: true) are examples for previewing the design: they
+     only appear in previews or with ?demo in the address, always tagged "Example", and
+     never on the live site. A real review needs no translation, for example:
+     { name: 'Noa S.', area: 'Carmel Center', item: 'trilece', stars: 5, text: '…' } */
+  const REVIEWS = ['trilece', 'beirut', 'cc-lotus', 'balls', 'cc-mango', 'cc-strawberry']
+    .map((item, i) => ({ n: i + 1, item, stars: 5, demo: true }));
+  const SHOW_DEMO = window.JOY_PREVIEW === true || /[?&]demo\b/.test(location.search);
+  function renderReviews() {
+    const sec = $('#reviews'); if (!sec) return;
+    const list = REVIEWS.filter(r => !r.demo || SHOW_DEMO);
+    sec.hidden = !list.length;
+    if (!list.length) return;
+    const field = (r, f) => r.n ? t(`rv.${r.n}.${f}`) : r[f];
+    $('#reviewsDemo').hidden = !list.some(r => r.demo);
+    $('#reviewsTrack').innerHTML = list.map(r => {
+      const i = byId(r.item);
+      return `<figure class="review">${r.demo ? `<span class="review-tag">${esc(t('rv.tag'))}</span>` : ''}` +
+        `<div class="review-stars" role="img" aria-label="${esc(t('rv.stars').replace('{n}', r.stars))}">${'★'.repeat(r.stars)}</div>` +
+        `<blockquote>${esc(field(r, 'text'))}</blockquote>` +
+        `<figcaption>${i ? thumb(i) : ''}<span><b>${esc(field(r, 'name'))}</b><small>${esc(field(r, 'area'))}${i ? ` · ${esc(itemName(i))}` : ''}</small></span></figcaption></figure>`;
+    }).join('');
+  }
+
   /* ── checkout: one sheet with the box, delivery or pickup, the day and who it's for ── */
   const cart = $('#cart'), cartBar = $('#cartBar'), form = $('#orderForm');
   const method = () => (form.querySelector('input[name="method"]:checked') || {}).value || 'delivery';
@@ -693,22 +751,23 @@
 
   function renderCart() {
     const list = $('#cartItems'); if (!list) return;
-    const ids = CATALOG.filter(i => bag[i.id]);
+    const ls = boxLines();
     const f = document.activeElement && document.activeElement.closest ? document.activeElement.closest('#cartItems [data-step]') : null;
     const keep = f ? [f.closest('[data-id]').dataset.id, f.dataset.step] : null;
-    list.innerHTML = ids.map(i => `<li class="cart-item" data-id="${i.id}">${thumb(i)}<div class="cart-item-t"><p class="cart-name">${esc(itemName(i))}</p><p class="cart-meta">${esc(itemNotes(i))}</p></div>${stepper(i)}</li>`).join('');
+    list.innerHTML = ls.map(l => `<li class="cart-item" data-id="${l.key}">${thumb(l.item)}<div class="cart-item-t"><p class="cart-name">${esc(itemName(l.item))}</p><p class="cart-meta">${esc(sizeName(l.size))} · ${esc(money(l.price))}</p></div>${stepper(l.key, `${itemName(l.item)} (${sizeName(l.size)})`)}</li>`).join('') +
+      (ls.length ? `<li class="cart-total"><span>${esc(t('box.total'))}</span><b>${esc(money(totalPrice()))}</b></li>` : '');
     if (keep) {
       const again = $(`#cartItems [data-id="${keep[0]}"] [data-step="${keep[1]}"]`);
       (again && !again.disabled ? again : $('#cartItems [data-step="1"]') || $('#cartMore')).focus();
     }
-    $('#cartEmpty').hidden = ids.length > 0;
-    $('#cartMore').hidden = !ids.length;
-    $('#cartCount').textContent = ids.length ? plural('box.n', total()) : '';
+    $('#cartEmpty').hidden = ls.length > 0;
+    $('#cartMore').hidden = !ls.length;
+    $('#cartCount').textContent = ls.length ? plural('box.n', total()) : '';
     $('#cartQuick').innerHTML = FAVOURITES.map(id => {
       const i = byId(id);
-      return `<button type="button" class="quick" data-add="${id}">${thumb(i)}<span>${esc(itemName(i))}</span><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button>`;
+      return `<button type="button" class="quick" data-add="${id}">${thumb(i)}<span>${esc(itemName(i))}<small>${esc(sizeName(DEFAULT_SIZE))} · ${esc(money(SIZES[DEFAULT_SIZE].price))}</small></span><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button>`;
     }).join('');
-    if (ids.length) setErr('errItems', '');
+    if (ls.length) setErr('errItems', '');
   }
   function renderDays() {
     const wrap = $('#days'); if (!wrap) return;
@@ -750,8 +809,8 @@
   }
   function dateTooSoon(v) { return v && v < ymd(addDays(ORDER_DAYS)); }
   function compose() {
-    const items = CATALOG.filter(i => bag[i.id]), m = method();
-    const lines = [t('msg.hello'), ''].concat(items.map(i => `• ${bag[i.id]} × ${itemName(i)}`), ['']);
+    const ls = boxLines(), m = method();
+    const lines = [t('msg.hello'), ''].concat(ls.map(l => `• ${l.q} × ${itemName(l.item)} (${sizeName(l.size)}) · ${money(l.q * l.price)}`), [`${t('msg.total')}: ${money(totalPrice())}`, '']);
     lines.push(`${t('msg.method')}: ${t(m === 'pickup' ? 'msg.pickup' : 'msg.delivery')}`);
     const v = id => $(id).value.trim();
     const date = $('#fDate').value;
@@ -765,7 +824,7 @@
   function validate() {
     let first = null;
     const check = (id, msg, el) => { setErr(id, msg); if (msg && !first) first = el; };
-    check('errItems', CATALOG.some(i => bag[i.id]) ? '' : t('box.needItems'), $('#cartQuick .quick'));
+    check('errItems', boxLines().length ? '' : t('box.needItems'), $('#cartQuick .quick'));
     check('errAddress', method() === 'delivery' && !$('#fAddress').value.trim() ? t('box.needAddress') : '', $('#fAddress'));
     const dv = $('#fDate').value;
     check('errDate', !dv ? t('box.needDate') : (dateTooSoon(dv) ? t('box.tooSoon') : ''), otherDay ? $('#fDate') : $('#days .day'));
@@ -807,6 +866,12 @@
   }
   function bindBox() {
     document.addEventListener('click', e => {
+      const pick = e.target.closest('[data-size-pick] [data-size]');
+      if (pick) {
+        const group = pick.parentElement; group.dataset.cur = pick.dataset.size;
+        $$('[data-size]', group).forEach(b => b.setAttribute('aria-pressed', String(b === pick)));
+        return;
+      }
       const add = e.target.closest('[data-add]');
       if (add) { if (add.dataset.add) addToBox(add.dataset.add, add); return; }
       const step = e.target.closest('[data-step]');

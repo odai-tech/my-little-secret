@@ -349,7 +349,7 @@
         return;
       }
       const sec = Math.min(dt, 50) / 1000;
-      const want = Math.round(this.theme.density * (this.w * this.h / 1e6) * (this.w < 700 ? .6 : 1));
+      const want = Math.round(this.theme.density * (this.w * this.h / 1e6) * (this.w < 700 ? .6 : 1) * .6);  // a light sprinkle, never a storm
       let live = 0;
       for (const p of this.items) if (!p.dying) live++;
       if (live < want && Math.random() < .4) { const p = this.spawn(this.items.length < want * .4); if (p) this.items.push(p); }
